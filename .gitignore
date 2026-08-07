@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Env / secrets — never commit real values, only .env.example
+.env
+.env.local
+.env.*.local
+
+# Test / coverage
+coverage/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Native platform build artifacts (populated once each toolchain is set up)
+platform/desktop/windows/bin/
+platform/desktop/windows/obj/
+platform/desktop/macos/build/
+platform/desktop/macos/DerivedData/
+platform/desktop/linux/build/
+platform/mobile/android/.gradle/
+platform/mobile/android/build/
+platform/mobile/android/app/build/
+platform/mobile/ios/build/
+platform/mobile/ios/Pods/

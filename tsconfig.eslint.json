@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true
+  },
+  "include": [
+    "core/*/src/**/*.ts",
+    "core/*/test/**/*.ts",
+    "ui/*/src/**/*.ts",
+    "ui/*/test/**/*.ts",
+    "plugins/*/src/**/*.ts",
+    "plugins/*/test/**/*.ts",
+    "plugins/examples/*/src/**/*.ts",
+    "plugins/examples/*/test/**/*.ts",
+    "platform/web/src/**/*.ts",
+    "platform/web/test/**/*.ts",
+    "infra/telemetry/src/**/*.ts",
+    "infra/telemetry/test/**/*.ts",
+    "*.ts"
+  ],
+  "exclude": ["**/node_modules/**", "**/dist/**"]
+}

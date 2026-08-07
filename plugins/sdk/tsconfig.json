@@ -1,0 +1,34 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../core/event-bus"
+    },
+    {
+      "path": "../../core/plugin-runtime"
+    },
+    {
+      "path": "../../core/logging"
+    },
+    {
+      "path": "../../core/security"
+    },
+    {
+      "path": "../../core/memory-system"
+    },
+    {
+      "path": "../../core/voice-engine"
+    },
+    {
+      "path": "../../core/planner"
+    },
+    {
+      "path": "../../core/tool-framework"
+    }
+  ]
+}
