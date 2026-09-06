@@ -1,0 +1,8 @@
+# Default owners for everything in the repo.
+# Replace @ryper-os/core-team with real GitHub usernames/teams before first use.
+*                           @ryper-os/core-team
+
+/core/security/             @ryper-os/security-team
+/core/sync/                 @ryper-os/security-team
+/.github/workflows/         @ryper-os/platform-team
+/docs/ARCHITECTURE.md       @ryper-os/architecture-team

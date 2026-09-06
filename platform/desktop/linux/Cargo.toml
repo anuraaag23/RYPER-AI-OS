@@ -1,0 +1,15 @@
+[package]
+name = "ryper-os-desktop-linux"
+version = "0.1.0"
+edition = "2021"
+description = "RYPER AI OS — Linux (GTK4) desktop shell"
+license = "MIT"
+
+[[bin]]
+name = "ryper-os-desktop-linux"
+path = "src/main.rs"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }
+tonic = "0.12"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

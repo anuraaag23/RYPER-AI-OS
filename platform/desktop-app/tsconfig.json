@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist-electron",
+    "rootDir": "./electron",
+    "types": ["node"]
+  },
+  "include": ["electron"],
+  "references": [
+    { "path": "../../core/logging" },
+    { "path": "../../core/event-bus" },
+    { "path": "../../core/security" },
+    { "path": "../../core/model-router" },
+    { "path": "../../core/memory" },
+    { "path": "../../core/memory-system" },
+    { "path": "../../core/model-router" },
+    { "path": "../../core/ai-engine" },
+    { "path": "../../core/rag" },
+    { "path": "../../core/conversation" },
+    { "path": "../../platform/web" },
+    { "path": "../../core/voice-engine" },
+    { "path": "../../core/platform-capability" },
+    { "path": "../../core/windows-agent" },
+    { "path": "../../ui/design-system" },
+    { "path": "../../ui/components" }
+  ]
+}

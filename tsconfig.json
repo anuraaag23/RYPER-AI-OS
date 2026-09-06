@@ -1,0 +1,33 @@
+{
+  "files": [],
+  "references": [
+    { "path": "core/logging" },
+    { "path": "core/event-bus" },
+    { "path": "core/security" },
+    { "path": "core/model-router" },
+    { "path": "core/memory" },
+    { "path": "core/rag" },
+    { "path": "core/automation" },
+    { "path": "core/documents" },
+    { "path": "core/media" },
+    { "path": "core/sync" },
+    { "path": "core/plugin-runtime" },
+    { "path": "core/conversation" },
+    { "path": "core/ai-engine" },
+    { "path": "core/local-runtime" },
+    { "path": "core/memory-system" },
+    { "path": "core/voice-engine" },
+    { "path": "core/planner" },
+    { "path": "core/tool-framework" },
+    { "path": "core/plugin-platform" },
+    { "path": "core/platform-capability" },
+    { "path": "core/windows-agent" },
+    { "path": "platform/desktop-app" },
+    { "path": "ui/design-system" },
+    { "path": "ui/components" },
+    { "path": "plugins/sdk" },
+    { "path": "plugins/examples/example-plugin" },
+    { "path": "platform/web" },
+    { "path": "infra/telemetry" }
+  ]
+}

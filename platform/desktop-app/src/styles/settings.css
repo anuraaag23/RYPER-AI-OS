@@ -1,0 +1,92 @@
+.settings-window {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  height: 100vh;
+}
+
+.settings-window h1 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.settings-section {
+  position: relative;
+  padding: 16px;
+}
+
+.settings-section h2 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary, #a0a3b1);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.settings-row select,
+.settings-row input[type="text"] {
+  background: color-mix(in srgb, var(--color-text-secondary, #888) 12%, transparent);
+  border: none;
+  border-radius: var(--radius-sm, 12px);
+  padding: 6px 8px;
+  color: inherit;
+}
+
+.audio-status {
+  font-size: 12px;
+  text-transform: capitalize;
+  margin-left: 8px;
+}
+
+.audio-status--available {
+  color: #34d399;
+}
+
+.audio-status--permission-denied {
+  color: #fbbf24;
+}
+
+.audio-status--unavailable {
+  color: #f87171;
+}
+
+/* Honest output-device routing disclosure (Tier 1 UI brief section 7)
+   — only ever rendered from a real `sinkRoutingFailed` reason reported
+   by `playback-client.ts`, never a generic/fabricated warning. */
+.settings-warning {
+  font-size: 12px;
+  color: #fbbf24;
+  line-height: 1.4;
+}
+
+.health-status--healthy {
+  color: #34d399;
+}
+
+.health-status--degraded {
+  color: #fbbf24;
+}
+
+.health-status--unhealthy {
+  color: #f87171;
+}
+
+.health-details {
+  font-size: 12px;
+  color: var(--color-text-secondary, #a0a3b1);
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.settings-loading {
+  padding: 20px;
+}

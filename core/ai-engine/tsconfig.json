@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../core/logging" },
+    { "path": "../../core/event-bus" },
+    { "path": "../../core/model-router" },
+    { "path": "../../core/memory" },
+    { "path": "../../core/rag" },
+    { "path": "../../core/security" },
+    { "path": "../../infra/telemetry" }
+  ]
+}

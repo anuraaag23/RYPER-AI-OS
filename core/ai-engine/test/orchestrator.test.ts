@@ -1,0 +1,426 @@
+import { describe, expect, it, vi } from "vitest";
+import { EventBus } from "@ryper/event-bus";
+import { ModelRouter } from "@ryper/model-router";
+import { LongTermMemory } from "@ryper/memory";
+import { TelemetryClient } from "@ryper/telemetry";
+
+import { ProviderRegistry } from "../src/providers/registry.js";
+import { ModelSelectionEngine } from "../src/model-selection.js";
+import { PromptBuilder } from "../src/prompt-builder.js";
+import { TokenBudgetManager } from "../src/token-budget.js";
+import { ToolRegistry } from "../src/tool-calling/registry.js";
+import { currentTimeTool } from "../src/tool-calling/builtin-tools.js";
+import { SessionManager } from "../src/session-manager.js";
+import { AIOrchestrator } from "../src/orchestrator.js";
+import { EngineTimeoutError } from "../src/error-recovery.js";
+import type { AIProvider, ProviderChatRequest, StreamEvent } from "../src/types.js";
+
+function buildEngine(provider: AIProvider, telemetry?: TelemetryClient) {
+  const eventBus = new EventBus();
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+
+  const modelSelection = new ModelSelectionEngine(new ModelRouter(), registry);
+  const promptBuilder = new PromptBuilder({ systemPrompt: "You are RYPER." });
+  const tokenBudget = new TokenBudgetManager({
+    [provider.id]: { contextWindow: 8000, reservedForCompletion: 1000 },
+  });
+  const toolRegistry = new ToolRegistry();
+  toolRegistry.register(currentTimeTool);
+  const sessionManager = new SessionManager(new LongTermMemory(), undefined);
+
+  const orchestrator = new AIOrchestrator({
+    providerRegistry: registry,
+    modelSelection,
+    promptBuilder,
+    tokenBudget,
+    toolRegistry,
+    sessionManager,
+    eventBus,
+    telemetry,
+    retry: { sleep: async () => {} },
+  });
+
+  return { orchestrator, eventBus, sessionManager };
+}
+
+async function collect(iter: AsyncIterable<StreamEvent>): Promise<StreamEvent[]> {
+  const out: StreamEvent[] = [];
+  for await (const event of iter) out.push(event);
+  return out;
+}
+
+function textProvider(id: string, chunks: string[]): AIProvider {
+  return {
+    id,
+    kind: "local",
+    async *streamChat(): AsyncIterable<StreamEvent> {
+      for (const chunk of chunks) yield { type: "text_delta", delta: chunk };
+      yield { type: "done", finishReason: "stop" };
+    },
+  };
+}
+
+describe("AIOrchestrator", () => {
+  it("streams a plain text reply and records it in the session's context", async () => {
+    const { orchestrator, sessionManager } = buildEngine(
+      textProvider("local-1", ["Hello", " there"]),
+    );
+
+    const events = await collect(
+      orchestrator.sendMessage("s1", "hi", { device: { online: false } }),
+    );
+
+    expect(events).toEqual([
+      { type: "text_delta", delta: "Hello" },
+      { type: "text_delta", delta: " there" },
+      { type: "done", finishReason: "stop" },
+    ]);
+
+    const history = sessionManager.getOrCreate("s1").context.getShortTermMemory().getTurns();
+    expect(history.map((t) => t.role)).toEqual(["user", "assistant"]);
+  });
+
+  it("emits ai_engine.turn_completed on the event bus after a turn", async () => {
+    const { orchestrator, eventBus } = buildEngine(textProvider("local-1", ["hi"]));
+    let received: unknown;
+    eventBus.on("ai_engine.turn_completed", (event) => {
+      received = event.payload;
+    });
+
+    await collect(orchestrator.sendMessage("s1", "hi", { device: { online: false } }));
+    expect(received).toMatchObject({ providerId: "local-1", finishReason: "stop" });
+  });
+
+  it("runs a full tool-calling round trip: tool_call -> invoke -> follow-up round -> stop", async () => {
+    let callCount = 0;
+    const provider: AIProvider = {
+      id: "local-1",
+      kind: "local",
+      async *streamChat(request: ProviderChatRequest): AsyncIterable<StreamEvent> {
+        callCount += 1;
+        if (callCount === 1) {
+          yield {
+            type: "tool_call",
+            toolCall: { id: "call1", name: "get_current_time", arguments: {} },
+          };
+          yield { type: "done", finishReason: "tool_calls" };
+        } else {
+          // Second round: confirm the tool result made it into the prompt.
+          const hasToolMessage = request.messages.some(
+            (m) => m.role === "tool" && m.toolCallId === "call1",
+          );
+          yield {
+            type: "text_delta",
+            delta: hasToolMessage ? "It is now known." : "missing tool result",
+          };
+          yield { type: "done", finishReason: "stop" };
+        }
+      },
+    };
+
+    const { orchestrator } = buildEngine(provider);
+    const events = await collect(
+      orchestrator.sendMessage("s1", "what time is it", { device: { online: false } }),
+    );
+
+    expect(events[0]).toMatchObject({ type: "tool_call" });
+    // docs/adr/0023: the real, authoritative tool result must be
+    // directly observable — not just inferable from how the model
+    // chose to narrate it in the following round.
+    const toolResult = events.find((e) => e.type === "tool_result");
+    expect(toolResult).toMatchObject({ type: "tool_result", toolCallId: "call1", ok: true });
+    expect(events.some((e) => e.type === "text_delta" && e.delta === "It is now known.")).toBe(
+      true,
+    );
+    expect(events.at(-1)).toEqual({ type: "done", finishReason: "stop" });
+    expect(callCount).toBe(2);
+  });
+
+  it(
+    "docs/adr/0023: a real tool execution failure is directly observable via a " +
+      "tool_result{ok:false} event, even when the model narrates it gracefully",
+    async () => {
+      // Mirrors the real Phase 13.13 failure the user hit: the tool
+      // throws, ToolRegistry.invoke() catches it and reports ok:false
+      // (not an orchestrator "error" event), and the model produces a
+      // normal, successful-looking completion describing the failure.
+      // Before tool_result existed, nothing in the public StreamEvent
+      // stream distinguished this from a genuine success.
+      const toolRegistry = new ToolRegistry();
+      toolRegistry.register({
+        spec: {
+          name: "show_notification",
+          description: "test",
+          parameters: { type: "object", properties: {} },
+        },
+        execute: async () => {
+          throw new Error("PowerShell command exited with code 1");
+        },
+      });
+
+      const provider: AIProvider = {
+        id: "local-1",
+        kind: "local",
+        async *streamChat(request: ProviderChatRequest): AsyncIterable<StreamEvent> {
+          const hasToolMessage = request.messages.some((m) => m.role === "tool");
+          if (!hasToolMessage) {
+            yield {
+              type: "tool_call",
+              toolCall: { id: "call1", name: "show_notification", arguments: {} },
+            };
+            yield { type: "done", finishReason: "tool_calls" };
+          } else {
+            // The model gracefully narrates the failure — exactly what
+            // the real Qwen3 run did — which is precisely why the
+            // orchestrator never yields an "error" event here.
+            yield {
+              type: "text_delta",
+              delta: "It seems there was an issue showing the notification.",
+            };
+            yield { type: "done", finishReason: "stop" };
+          }
+        },
+      };
+
+      const registry = new ProviderRegistry();
+      registry.register(provider);
+      const orchestrator = new AIOrchestrator({
+        providerRegistry: registry,
+        modelSelection: new ModelSelectionEngine(new ModelRouter(), registry),
+        promptBuilder: new PromptBuilder({ systemPrompt: "sys" }),
+        tokenBudget: new TokenBudgetManager({
+          "local-1": { contextWindow: 8000, reservedForCompletion: 1000 },
+        }),
+        toolRegistry,
+        sessionManager: new SessionManager(new LongTermMemory(), undefined),
+        eventBus: new EventBus(),
+      });
+
+      const events = await collect(
+        orchestrator.sendMessage("s1", "show a notification", { device: { online: false } }),
+      );
+
+      // No orchestrator-level "error" event — this is the exact,
+      // real loophole the old test's `events.some(e => e.type ===
+      // "error")` check missed.
+      expect(events.some((e) => e.type === "error")).toBe(false);
+      // But the real result is directly, unambiguously observable:
+      const toolResult = events.find((e) => e.type === "tool_result");
+      expect(toolResult).toMatchObject({ type: "tool_result", ok: false });
+      expect((toolResult as { content: string }).content).toContain(
+        "PowerShell command exited with code 1",
+      );
+    },
+  );
+
+  it("stops after maxToolRounds and reports finishReason 'length' if the model keeps requesting tools", async () => {
+    const provider: AIProvider = {
+      id: "local-1",
+      kind: "local",
+      async *streamChat(): AsyncIterable<StreamEvent> {
+        yield {
+          type: "tool_call",
+          toolCall: { id: "call-x", name: "get_current_time", arguments: {} },
+        };
+        yield { type: "done", finishReason: "tool_calls" };
+      },
+    };
+
+    const eventBus = new EventBus();
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const toolRegistry = new ToolRegistry();
+    toolRegistry.register(currentTimeTool);
+    const orchestrator = new AIOrchestrator({
+      providerRegistry: registry,
+      modelSelection: new ModelSelectionEngine(new ModelRouter(), registry),
+      promptBuilder: new PromptBuilder({ systemPrompt: "sys" }),
+      tokenBudget: new TokenBudgetManager({
+        "local-1": { contextWindow: 8000, reservedForCompletion: 1000 },
+      }),
+      toolRegistry,
+      sessionManager: new SessionManager(new LongTermMemory(), undefined),
+      eventBus,
+      maxToolRounds: 2,
+      retry: { sleep: async () => {} },
+    });
+
+    const events = await collect(
+      orchestrator.sendMessage("s1", "loop forever", { device: { online: false } }),
+    );
+    expect(events.at(-1)).toEqual({ type: "done", finishReason: "length" });
+  });
+
+  it("retries a provider that fails before streaming any output, then succeeds", async () => {
+    let attempts = 0;
+    const provider: AIProvider = {
+      id: "local-1",
+      kind: "local",
+      async *streamChat(): AsyncIterable<StreamEvent> {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("connection refused");
+        }
+        yield { type: "text_delta", delta: "recovered" };
+        yield { type: "done", finishReason: "stop" };
+      },
+    };
+
+    const { orchestrator } = buildEngine(provider);
+    const events = await collect(
+      orchestrator.sendMessage("s1", "hi", { device: { online: false } }),
+    );
+    expect(attempts).toBe(2);
+    expect(events).toContainEqual({ type: "text_delta", delta: "recovered" });
+  });
+
+  it("surfaces a mid-stream provider failure as an error event instead of throwing", async () => {
+    const provider: AIProvider = {
+      id: "local-1",
+      kind: "local",
+      async *streamChat(): AsyncIterable<StreamEvent> {
+        yield { type: "text_delta", delta: "partial" };
+        throw new Error("connection dropped");
+      },
+    };
+
+    const { orchestrator } = buildEngine(provider);
+    const events = await collect(
+      orchestrator.sendMessage("s1", "hi", { device: { online: false } }),
+    );
+    expect(events[0]).toEqual({ type: "text_delta", delta: "partial" });
+    expect(events.some((e) => e.type === "error")).toBe(true);
+  });
+
+  it("never calls the telemetry transport unless telemetry is explicitly enabled", async () => {
+    const transport = vi.fn();
+    const disabledTelemetry = new TelemetryClient({ enabled: false, transport });
+    const { orchestrator } = buildEngine(textProvider("local-1", ["hi"]), disabledTelemetry);
+
+    await collect(orchestrator.sendMessage("s1", "hi", { device: { online: false } }));
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it("calls the telemetry transport once telemetry is explicitly enabled", async () => {
+    const transport = vi.fn();
+    const enabledTelemetry = new TelemetryClient({ enabled: true, transport });
+    const { orchestrator } = buildEngine(textProvider("local-1", ["hi"]), enabledTelemetry);
+
+    await collect(orchestrator.sendMessage("s1", "hi", { device: { online: false } }));
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it("listAvailableProviders() reflects the registered providers", () => {
+    const { orchestrator } = buildEngine(textProvider("local-1", ["hi"]));
+    expect(orchestrator.listAvailableProviders().map((p) => p.id)).toEqual(["local-1"]);
+  });
+
+  it(
+    "docs/adr/0022: never forwards tool_call_progress events to sendMessage()'s own caller, " +
+      "and doesn't mistake one for a done event",
+    async () => {
+      const provider: AIProvider = {
+        id: "local-1",
+        kind: "local",
+        async *streamChat(): AsyncIterable<StreamEvent> {
+          yield { type: "tool_call_progress" };
+          yield { type: "tool_call_progress" };
+          yield { type: "text_delta", delta: "hi" };
+          yield { type: "done", finishReason: "stop" };
+        },
+      };
+
+      const { orchestrator } = buildEngine(provider);
+      const events = await collect(
+        orchestrator.sendMessage("s1", "hi", { device: { online: false } }),
+      );
+
+      // Only the real, user-visible events ever reach the caller — no
+      // "tool_call_progress" leaked out, and the real "done" event (not
+      // a stray progress event mistaken for one) is last.
+      expect(events).toEqual([
+        { type: "text_delta", delta: "hi" },
+        { type: "done", finishReason: "stop" },
+      ]);
+    },
+  );
+
+  it("docs/adr/0022: a local-kind provider gets localStreamTimeoutMs, a non-local provider keeps streamTimeoutMs", async () => {
+    async function* slowThenDone(delayMs: number): AsyncIterable<StreamEvent> {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      yield { type: "text_delta", delta: "eventually" };
+      yield { type: "done", finishReason: "stop" };
+    }
+
+    const localProvider: AIProvider = {
+      id: "local-1",
+      kind: "local",
+      streamChat: () => slowThenDone(40),
+    };
+    const registry = new ProviderRegistry();
+    registry.register(localProvider);
+    const toolRegistry = new ToolRegistry();
+    const orchestrator = new AIOrchestrator({
+      providerRegistry: registry,
+      modelSelection: new ModelSelectionEngine(new ModelRouter(), registry),
+      promptBuilder: new PromptBuilder({ systemPrompt: "sys" }),
+      tokenBudget: new TokenBudgetManager({
+        "local-1": { contextWindow: 8000, reservedForCompletion: 1000 },
+      }),
+      toolRegistry,
+      sessionManager: new SessionManager(new LongTermMemory(), undefined),
+      eventBus: new EventBus(),
+      // Tight default (for a "remote"/non-local provider), generous
+      // localStreamTimeoutMs — a real, local 40ms-slow provider must
+      // survive on the latter, not the former.
+      streamTimeoutMs: 10,
+      localStreamTimeoutMs: 200,
+      retry: { sleep: async () => {} },
+    });
+
+    const events = await collect(
+      orchestrator.sendMessage("s1", "hi", { device: { online: false } }),
+    );
+    expect(events).toContainEqual({ type: "text_delta", delta: "eventually" });
+
+    // The same 40ms-slow provider, but registered as a non-"local" kind
+    // (e.g. a cloud provider), must still fail fast on the tight
+    // streamTimeoutMs — proving the larger budget is genuinely
+    // provider-kind-scoped, not a blanket increase for everyone. A
+    // real inter-event timeout is an existing, by-design hard failure
+    // (EngineTimeoutError propagates out of sendMessage() rather than
+    // being softened into a StreamEvent — unrelated to this phase's
+    // fix, and unchanged by it).
+    const remoteProvider: AIProvider = {
+      id: "remote-1",
+      kind: "openai-compatible",
+      streamChat: () => slowThenDone(40),
+    };
+    const remoteRegistry = new ProviderRegistry();
+    remoteRegistry.register(remoteProvider);
+    const remoteOrchestrator = new AIOrchestrator({
+      providerRegistry: remoteRegistry,
+      modelSelection: new ModelSelectionEngine(new ModelRouter(), remoteRegistry),
+      promptBuilder: new PromptBuilder({ systemPrompt: "sys" }),
+      tokenBudget: new TokenBudgetManager({
+        "remote-1": { contextWindow: 8000, reservedForCompletion: 1000 },
+      }),
+      toolRegistry: new ToolRegistry(),
+      sessionManager: new SessionManager(new LongTermMemory(), undefined),
+      eventBus: new EventBus(),
+      streamTimeoutMs: 10,
+      localStreamTimeoutMs: 200,
+      retry: { sleep: async () => {} },
+    });
+    await expect(
+      collect(
+        remoteOrchestrator.sendMessage("s1", "hi", {
+          device: { online: true },
+          requiresWebSearch: true,
+          preferredProviderId: "remote-1",
+        }),
+      ),
+    ).rejects.toThrow(EngineTimeoutError);
+  });
+});

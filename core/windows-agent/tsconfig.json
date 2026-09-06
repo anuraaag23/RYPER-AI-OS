@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../core/logging" },
+    { "path": "../../core/event-bus" },
+    { "path": "../../core/security" },
+    { "path": "../../core/tool-framework" },
+    { "path": "../../core/planner" },
+    { "path": "../../plugins/sdk" },
+    { "path": "../../core/platform-capability" }
+  ]
+}

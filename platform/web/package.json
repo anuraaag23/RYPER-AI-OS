@@ -1,0 +1,30 @@
+{
+  "name": "@ryper/web-shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ryper/conversation": "0.1.0",
+    "@ryper/design-system": "0.1.0",
+    "@ryper/components": "0.1.0",
+    "@ryper/logging": "0.1.0",
+    "@ryper/event-bus": "0.1.0",
+    "@ryper/model-router": "0.1.0",
+    "@ryper/memory": "0.1.0",
+    "@ryper/rag": "0.1.0"
+  },
+  "devDependencies": {}
+}

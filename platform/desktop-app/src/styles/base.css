@@ -1,0 +1,742 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-background, #0e0e16);
+  color: var(--color-text-primary, #f2f3f7);
+  font-family: -apple-system, "Segoe UI Variable", "Segoe UI", "SF Pro Text", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-text-secondary, #888) 30%, transparent);
+  border-radius: var(--radius-pill, 999px);
+}
+
+/*
+ * Liquid Glass surface. `backdrop-filter: blur() saturate()` + a soft
+ * inset border + layered shadow is the reliable, broadly-supported
+ * technique for the "frosted glass with depth" effect Chromium (and
+ * therefore Electron) actually renders today. The `--glass-*-scale`/
+ * `-chroma` custom properties (real values from
+ * `@ryper/design-system`'s `glassPresets`, applied by `apply-tokens.ts`)
+ * are also threaded onto the element as data attributes for a future
+ * SVG `feDisplacementMap` refraction filter — genuine cross-browser
+ * `backdrop-filter: url(#filter)` support for that is not yet reliable
+ * across the engines Electron ships, so this phase ships the
+ * blur+saturate+gradient baseline every glass surface actually renders
+ * with, not an effect that silently degrades to nothing.
+ */
+.glass {
+  position: relative;
+  border-radius: var(--radius-lg, 28px);
+  background: color-mix(in srgb, var(--color-surface, #17171f) 55%, transparent);
+  backdrop-filter: blur(var(--glass-panel-fallback-blur, 20px))
+    saturate(var(--glass-panel-saturate, 1.3));
+  -webkit-backdrop-filter: blur(var(--glass-panel-fallback-blur, 20px))
+    saturate(var(--glass-panel-saturate, 1.3));
+  border: 1px solid color-mix(in srgb, white var(--glass-panel-border-alpha, 10%), transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, white 8%, transparent) inset,
+    0 20px 60px -20px rgba(0, 0, 0, 0.55);
+}
+
+.glass--dock {
+  border-radius: var(--radius-pill, 999px);
+  backdrop-filter: blur(var(--glass-dock-fallback-blur, 18px))
+    saturate(var(--glass-dock-saturate, 1.4));
+  -webkit-backdrop-filter: blur(var(--glass-dock-fallback-blur, 18px))
+    saturate(var(--glass-dock-saturate, 1.4));
+}
+
+.glass--assistant {
+  backdrop-filter: blur(var(--glass-assistant-fallback-blur, 16px))
+    saturate(var(--glass-assistant-saturate, 1.5));
+  -webkit-backdrop-filter: blur(var(--glass-assistant-fallback-blur, 16px))
+    saturate(var(--glass-assistant-saturate, 1.5));
+}
+
+.glass-highlight {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    120% 60% at 20% 0%,
+    color-mix(in srgb, white 14%, transparent),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.voice-orb-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.voice-orb {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--motion-fast, 120ms) var(--motion-easing-standard, ease);
+  background: radial-gradient(
+    circle at 35% 25%,
+    color-mix(in srgb, var(--color-accent, #5b7cfa) 65%, white 10%),
+    color-mix(in srgb, var(--color-accent, #5b7cfa) 85%, black 20%)
+  );
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, white 25%, transparent) inset,
+    0 12px 30px -8px color-mix(in srgb, var(--color-accent, #5b7cfa) 70%, transparent);
+}
+
+.voice-orb-core {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 40% 30%,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0) 65%
+  );
+  filter: blur(2px);
+}
+
+.voice-orb--listening,
+.voice-orb--speaking {
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, white 30%, transparent) inset,
+    0 0 0 6px color-mix(in srgb, var(--color-accent, #5b7cfa) 22%, transparent),
+    0 16px 40px -8px color-mix(in srgb, var(--color-accent, #5b7cfa) 80%, transparent);
+}
+
+.voice-orb--thinking {
+  animation: orb-thinking 1.4s var(--motion-easing-standard, ease) infinite;
+}
+
+@keyframes orb-thinking {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.25);
+  }
+}
+
+.voice-orb-caption {
+  font-size: 12px;
+  color: var(--color-text-secondary, #a0a3b1);
+  min-height: 16px;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100vh;
+  padding: 10px;
+  gap: 10px;
+}
+
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.sidebar-new {
+  border: none;
+  border-radius: var(--radius-sm, 12px);
+  padding: 10px 12px;
+  background: var(--color-accent, #5b7cfa);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sidebar-search {
+  border: none;
+  border-radius: var(--radius-sm, 12px);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--color-text-secondary, #888) 12%, transparent);
+  color: inherit;
+}
+
+.sidebar-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary, #a0a3b1);
+  margin-top: 6px;
+}
+
+.conversation-list,
+.sidebar-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: var(--radius-sm, 12px);
+  padding: 2px 4px;
+}
+
+.conversation-item--active {
+  background: color-mix(in srgb, var(--color-accent, #5b7cfa) 18%, transparent);
+}
+
+.conversation-title {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item-actions {
+  display: none;
+  gap: 4px;
+}
+
+.conversation-item:hover .conversation-item-actions {
+  display: flex;
+}
+
+.conversation-item-actions button,
+.sidebar-nav-list button {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary, #a0a3b1);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.sidebar-nav-list button {
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border-radius: var(--radius-sm, 12px);
+}
+
+.sidebar-nav-list button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.sidebar-spacer {
+  flex: 1;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-panel--empty {
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--color-text-secondary, #a0a3b1);
+}
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 4px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 72%;
+}
+
+.message--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.message--assistant {
+  align-self: flex-start;
+}
+
+.message-bubble {
+  position: relative;
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 20px);
+}
+
+.message-bubble--user {
+  background: color-mix(
+    in srgb,
+    var(--color-accent, #5b7cfa) 30%,
+    var(--color-surface, #17171f) 55%
+  );
+}
+
+.message-content :is(pre) {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 10px;
+  border-radius: var(--radius-sm, 12px);
+  overflow-x: auto;
+}
+
+.message-content table {
+  border-collapse: collapse;
+}
+
+.message-content td,
+.message-content th {
+  border: 1px solid color-mix(in srgb, white 15%, transparent);
+  padding: 4px 8px;
+}
+
+.message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #a0a3b1);
+}
+
+.message-actions button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.message-routing {
+  text-transform: uppercase;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.message--pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-text-secondary, #a0a3b1);
+  font-style: italic;
+}
+
+.turn-cancel {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 55%, transparent);
+  color: var(--color-danger, #ef4444);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 11px;
+  font-style: normal;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+.turn-cancel:hover {
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 14%, transparent);
+}
+
+.message-cancelled-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-danger, #ef4444);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Real tool-execution visibility (Tier 1 UI brief section C/H) — a
+   quiet, collapsed-by-default disclosure so a normal reply stays
+   clean, but every real tool call/result is genuinely inspectable. */
+.tool-activity {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-activity-item {
+  border: 1px solid color-mix(in srgb, white 10%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface, #17171f) 60%, transparent);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.tool-activity-item summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-text-secondary, #a0a3b1);
+}
+
+.tool-activity-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-activity-status {
+  font-weight: 600;
+  width: 14px;
+  text-align: center;
+}
+
+.tool-activity-item--ok .tool-activity-status {
+  color: color-mix(in srgb, #34d399 80%, white 10%);
+}
+
+.tool-activity-item--failed .tool-activity-status {
+  color: var(--color-danger, #ef4444);
+}
+
+.tool-activity-name {
+  color: var(--color-text-primary, #f2f3f7);
+  font-weight: 500;
+}
+
+.tool-activity-label {
+  opacity: 0.7;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.tool-activity-detail {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-secondary, #a0a3b1);
+}
+
+.tool-activity-detail code {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* Honest, visible failure state (Tier 1 UI brief section 12) — no
+   silent success/failure: a rejected send/regenerate surfaces here
+   instead of just resetting the composer with nothing shown. */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 45%, transparent);
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, transparent);
+  color: var(--color-text-primary, #f2f3f7);
+  font-size: 13px;
+}
+
+.error-banner-message {
+  overflow-wrap: anywhere;
+}
+
+.error-banner button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid color-mix(in srgb, white 20%, transparent);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chat-panel-footer {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+/* Real "open this"/"play this" visibility (Tier 1 UI brief section E/10)
+   — only ever renders a `ContextReferenceTracker` value the backend set
+   from a genuine successful open, never a fabricated preview. Quiet by
+   design: an ambient status line, not something demanding attention. */
+.context-reference-chip {
+  align-self: flex-start;
+  margin: 4px 4px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, white 12%, transparent);
+  background: color-mix(in srgb, var(--color-surface, #17171f) 55%, transparent);
+  color: var(--color-text-secondary, #a0a3b1);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.composer-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.composer {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg, 28px);
+}
+
+.composer-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: inherit;
+  resize: none;
+  max-height: 160px;
+  font: inherit;
+}
+
+.composer-input:focus {
+  outline: none;
+}
+
+/*
+ * Real microphone control wired to the existing voice IPC
+ * (`startVoiceTurn`/`stopVoiceTurn`/`requestAudioPermission` — see
+ * `Composer.tsx`), not a decorative affordance. `aria-pressed` (rather
+ * than a bespoke `--active` modifier class) drives the "voice in
+ * progress" tint so it stays true for every non-idle orb state
+ * (listening/thinking/speaking) without repeating the same rule three
+ * times; `.composer-mic--thinking` only adds the processing pulse on
+ * top of that shared tint, reusing `VoiceOrb`'s own `orb-thinking`
+ * keyframes rather than defining a second animation for the same idea.
+ */
+.composer-mic {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  color: var(--color-text-secondary, #a0a3b1);
+  background: color-mix(in srgb, var(--color-text-secondary, #888) 12%, transparent);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast, 120ms) var(--motion-easing-standard, ease),
+    color var(--motion-fast, 120ms) var(--motion-easing-standard, ease),
+    box-shadow var(--motion-fast, 120ms) var(--motion-easing-standard, ease);
+}
+
+.composer-mic:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-secondary, #888) 20%, transparent);
+}
+
+.composer-mic:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.composer-mic-icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.composer-mic[aria-pressed="true"] {
+  color: white;
+  background: var(--color-accent, #5b7cfa);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent, #5b7cfa) 22%, transparent);
+}
+
+.composer-mic--thinking {
+  animation: orb-thinking 1.4s var(--motion-easing-standard, ease) infinite;
+}
+
+/* Real, honest permission/device status only — see `describeMicIssue` in `Composer.tsx`. */
+.composer-mic-status {
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--color-danger, #ef4444);
+}
+
+.composer-send {
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  padding: 8px 16px;
+  background: var(--color-accent, #5b7cfa);
+  color: white;
+  cursor: pointer;
+}
+
+.composer-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--color-background, #0e0e16);
+}
+
+.splash-orb {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 25%, var(--color-accent, #5b7cfa), transparent 70%);
+  animation: splash-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes splash-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.splash-title {
+  font-size: 15px;
+  color: var(--color-text-secondary, #a0a3b1);
+}
+
+.splash-steps {
+  list-style: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary, #a0a3b1);
+  max-width: 360px;
+}
+
+.splash-step-fail {
+  color: #ff6b6b;
+}
+
+.confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.confirmation-dialog {
+  width: min(420px, calc(100vw - 48px));
+  padding: 24px;
+  border-radius: 14px;
+  background: var(--color-surface, #1a1a26);
+  border: 1px solid var(--color-border, #2a2a3a);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.confirmation-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #f2f2f7);
+  margin-bottom: 8px;
+}
+
+.confirmation-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #a0a3b1);
+  margin-bottom: 20px;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.confirmation-deny,
+.confirmation-approve {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border, #2a2a3a);
+}
+
+.confirmation-deny {
+  background: transparent;
+  color: var(--color-text-primary, #f2f2f7);
+}
+
+.confirmation-approve {
+  background: var(--color-accent, #5b7cfa);
+  color: white;
+  border-color: transparent;
+}

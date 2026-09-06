@@ -1,0 +1,31 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "core/*/src/**/*.ts",
+    "core/*/test/**/*.ts",
+    "ui/*/src/**/*.ts",
+    "ui/*/test/**/*.ts",
+    "plugins/*/src/**/*.ts",
+    "plugins/*/test/**/*.ts",
+    "plugins/examples/*/src/**/*.ts",
+    "plugins/examples/*/test/**/*.ts",
+    "platform/web/src/**/*.ts",
+    "platform/web/test/**/*.ts",
+    "platform/desktop-app/electron/**/*.ts",
+    "platform/desktop-app/src/**/*.tsx",
+    "platform/desktop-app/src/**/*.ts",
+    "platform/desktop-app/test/**/*.ts",
+    "platform/desktop-app/test/**/*.tsx",
+    "platform/desktop-app/*.ts",
+    "infra/telemetry/src/**/*.ts",
+    "infra/telemetry/test/**/*.ts",
+    "*.ts"
+  ],
+  "exclude": ["**/node_modules/**", "**/dist/**"]
+}
