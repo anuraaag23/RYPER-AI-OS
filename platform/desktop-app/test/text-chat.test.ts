@@ -316,4 +316,97 @@ describe("runTextTurn — real text chat routed through the shared AIOrchestrato
       ),
     ).rejects.toThrow("provider unreachable");
   });
+
+  it("emits progress callbacks for thinking, tool call, tool result, and generating stages", async () => {
+    const fakeOrchestrator = {
+      async *sendMessage(): AsyncGenerator<StreamEvent> {
+        yield {
+          type: "tool_call",
+          toolCall: { id: "tc-1", name: "open_application", arguments: { app: "Notepad" } },
+        };
+        yield {
+          type: "tool_result",
+          toolCallId: "tc-1",
+          name: "open_application",
+          content: "opened",
+          ok: true,
+        };
+        yield { type: "text_delta", delta: "Notepad opened." };
+      },
+    } as unknown as AIOrchestrator;
+
+    const broker = new CapabilityBroker(() => true);
+    const capabilityManager = createCapabilityManager({
+      broker,
+      platformDetector: () => "windows",
+    });
+    const adapter = await createWindowsAdapter();
+    capabilityManager.registerAdapter(adapter);
+    const powerConfirmation = createPowerConfirmationManager();
+
+    const progressUpdates: { stage: string; label: string }[] = [];
+    const res = await runTextTurn(
+      "conv-prog",
+      "open notepad",
+      { online: false },
+      {
+        orchestrator: fakeOrchestrator,
+        capabilityManager,
+        powerConfirmation,
+        cloudLLMConfigured: false,
+      },
+      undefined,
+      (p) => progressUpdates.push(p),
+    );
+
+    expect(res.reply).toBe("Notepad opened.");
+    expect(progressUpdates).toEqual([
+      { stage: "thinking", label: "Thinking…" },
+      { stage: "tool", label: "Opening Notepad…" },
+      { stage: "tool", label: "Working on it…" },
+      { stage: "generating", label: "Finishing up…" },
+    ]);
+  });
+
+  it("packages action_completed error when a tool succeeded but summarization failed", async () => {
+    const fakeOrchestrator = {
+      async *sendMessage(): AsyncGenerator<StreamEvent> {
+        yield {
+          type: "tool_call",
+          toolCall: { id: "tc-1", name: "open_application", arguments: { app: "Notepad" } },
+        };
+        yield {
+          type: "tool_result",
+          toolCallId: "tc-1",
+          name: "open_application",
+          content: "opened",
+          ok: true,
+        };
+        yield { type: "error", message: "model context overflow" };
+      },
+    } as unknown as AIOrchestrator;
+
+    const broker = new CapabilityBroker(() => true);
+    const capabilityManager = createCapabilityManager({
+      broker,
+      platformDetector: () => "windows",
+    });
+    const adapter = await createWindowsAdapter();
+    capabilityManager.registerAdapter(adapter);
+    const powerConfirmation = createPowerConfirmationManager();
+
+    await expect(
+      runTextTurn(
+        "conv-tool-fail",
+        "open notepad",
+        { online: false },
+        {
+          orchestrator: fakeOrchestrator,
+          capabilityManager,
+          powerConfirmation,
+          cloudLLMConfigured: false,
+        },
+      ),
+    ).rejects.toThrow("action_completed:open_application:model context overflow");
+  });
 });

@@ -121,6 +121,7 @@ export function Composer({ onSend, disabled, initialValue }: ComposerProps): JSX
           disabled={disabled}
           aria-pressed={active}
           aria-label={active ? MIC_LABEL.active : MIC_LABEL.idle}
+          title={active ? MIC_LABEL.active : "Start voice command (Ctrl + Shift + Space)"}
         >
           <svg
             className="composer-mic-icon"

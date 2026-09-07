@@ -5,10 +5,12 @@ import {
   type AudioDeviceKindPayload,
   type AudioStatusPayload,
   type ConfirmationRequestPayload,
+  type CurrentReferencePayload,
   type RyperEventApi,
   type RyperInvokeApi,
   type SendMessageRequest,
   type StartupDiagnostics,
+  type TurnProgressPayload,
   type VoiceStatePayload,
 } from "./ipc-contract.js";
 import { AUDIO_IPC_CHANNELS } from "./audio-ipc-contract.js";
@@ -51,7 +53,14 @@ const invokeApi: RyperInvokeApi = {
   respondToConfirmation: (id: string, approved: boolean) =>
     ipcRenderer.invoke(IPC_CHANNELS.respondToConfirmation, id, approved),
   cancelTurn: (turnId: string) => ipcRenderer.invoke(IPC_CHANNELS.cancelTurn, turnId),
-  getCurrentReference: () => ipcRenderer.invoke(IPC_CHANNELS.getCurrentReference),
+  getCurrentReference(): Promise<CurrentReferencePayload | undefined> {
+    return ipcRenderer.invoke(IPC_CHANNELS.getCurrentReference);
+  },
+  listPermissions: () => ipcRenderer.invoke(IPC_CHANNELS.listPermissions),
+  resetPermissions: () => ipcRenderer.invoke(IPC_CHANNELS.resetPermissions),
+  getAIStatus: () => ipcRenderer.invoke(IPC_CHANNELS.getAIStatus),
+  restartLocalAI: () => ipcRenderer.invoke(IPC_CHANNELS.restartLocalAI),
+  openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.openLogsFolder),
 };
 
 const eventApi: RyperEventApi = {
@@ -67,6 +76,8 @@ const eventApi: RyperEventApi = {
     subscribe(IPC_CHANNELS.confirmationRequested, handler),
   onConversationUpdated: (handler: (conversationId: string) => void) =>
     subscribe(IPC_CHANNELS.conversationUpdated, handler),
+  onTurnProgress: (handler: (progress: TurnProgressPayload) => void) =>
+    subscribe(IPC_CHANNELS.turnProgress, handler),
 };
 
 contextBridge.exposeInMainWorld("ryper", { ...invokeApi, ...eventApi });

@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pushToTalkShortcut: "CommandOrControl+Shift+Space",
   voiceLanguage: "auto",
   ttsVoice: "auto",
+  hasCompletedOnboarding: false,
 };
 
 function isThemePreference(value: unknown): value is AppSettings["theme"] {
@@ -55,6 +56,9 @@ function sanitizeSettings(candidate: unknown): AppSettings {
     // a since-uninstalled preferred browser would be.
     ...(typeof raw.preferredBrowserId === "string" && raw.preferredBrowserId.length > 0
       ? { preferredBrowserId: raw.preferredBrowserId }
+      : {}),
+    ...(typeof raw.hasCompletedOnboarding === "boolean"
+      ? { hasCompletedOnboarding: raw.hasCompletedOnboarding }
       : {}),
   };
 }

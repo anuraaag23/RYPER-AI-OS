@@ -104,6 +104,8 @@ export interface AppSettings {
    * the system default rather than failing the open.
    */
   readonly preferredBrowserId?: string;
+  /** True if the user has completed or dismissed the initial first-run onboarding. */
+  readonly hasCompletedOnboarding?: boolean;
 }
 
 export interface HealthCheckSummary {
@@ -143,6 +145,16 @@ export interface ConfirmationRequestPayload {
   readonly id: string;
   readonly title: string;
   readonly message: string;
+  readonly approveLabel?: string;
+  readonly denyLabel?: string;
+}
+
+export interface PermissionEntryPayload {
+  readonly id: string;
+  readonly category: string;
+  readonly description: string;
+  readonly granted: boolean;
+  readonly isSessionOnly: boolean;
 }
 
 // ---- Phase 13.6: real audio devices ----
@@ -218,6 +230,30 @@ export interface RyperInvokeApi {
    * ever sets it — never something typed into the composer.
    */
   getCurrentReference(): Promise<CurrentReferencePayload | undefined>;
+  listPermissions(): Promise<readonly PermissionEntryPayload[]>;
+  resetPermissions(): Promise<void>;
+  getAIStatus(): Promise<AIStatusPayload>;
+  restartLocalAI(): Promise<{ readonly ok: boolean; readonly message: string }>;
+  openLogsFolder(): Promise<void>;
+}
+
+export type LocalAIReadinessState = "ready" | "starting" | "missing" | "failed";
+
+export interface AIStatusPayload {
+  readonly mode: "local" | "cloud" | "heuristic";
+  readonly label: string;
+  readonly ready: boolean;
+  readonly readinessState?: LocalAIReadinessState;
+  readonly detail?: string;
+}
+
+export type TurnProgressStage = "thinking" | "warmup" | "tool" | "generating";
+
+export interface TurnProgressPayload {
+  readonly conversationId: string;
+  readonly turnId?: string | undefined;
+  readonly stage: TurnProgressStage;
+  readonly label: string;
 }
 
 /** Renderer-facing mirror of `context-reference.ts`'s `CurrentReference` — a plain, serializable shape for IPC. */
@@ -245,6 +281,7 @@ export interface RyperEventApi {
    * polling.
    */
   onConversationUpdated(handler: (conversationId: string) => void): () => void;
+  onTurnProgress(handler: (progress: TurnProgressPayload) => void): () => void;
 }
 
 export const IPC_CHANNELS = {
@@ -277,4 +314,10 @@ export const IPC_CHANNELS = {
   cancelTurn: "messages:cancel",
   conversationUpdated: "conversations:updated",
   getCurrentReference: "context:current-reference",
+  listPermissions: "permissions:list",
+  resetPermissions: "permissions:reset",
+  getAIStatus: "ai:status",
+  turnProgress: "turn:progress",
+  restartLocalAI: "ai:restart",
+  openLogsFolder: "diagnostics:open-logs",
 } as const;

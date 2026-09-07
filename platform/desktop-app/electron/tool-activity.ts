@@ -30,6 +30,13 @@ export function summarizeForDisplay(value: unknown): string {
       text = String(value);
     }
   }
+  if (
+    text.includes("was not granted for actor") ||
+    text.includes("is not granted to actor") ||
+    (text.includes("capability") && text.includes("not granted"))
+  ) {
+    return "Permission was denied by the user. The action was cancelled.";
+  }
   return text.length > MAX_SUMMARY_LENGTH ? `${text.slice(0, MAX_SUMMARY_LENGTH)}…` : text;
 }
 

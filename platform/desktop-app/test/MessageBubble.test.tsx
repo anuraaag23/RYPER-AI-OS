@@ -75,14 +75,45 @@ describe("MessageBubble", () => {
     expect(onRegenerate).toHaveBeenCalledWith("m7");
   });
 
-  it("shows the routing target badge when present", () => {
-    render(
+  it("shows the friendly routing target badge when present", () => {
+    const { rerender } = render(
       <MessageBubble
         message={buildMessage({ routingTarget: "local" })}
         onDelete={() => undefined}
         onRegenerate={() => undefined}
       />,
     );
-    expect(screen.getByText("local")).toBeTruthy();
+    expect(screen.getByText("🔒 On-Device (Private)")).toBeTruthy();
+
+    rerender(
+      <MessageBubble
+        message={buildMessage({ routingTarget: "cloud" })}
+        onDelete={() => undefined}
+        onRegenerate={() => undefined}
+      />,
+    );
+    expect(screen.getByText("☁️ Cloud AI")).toBeTruthy();
+  });
+
+  it("formats raw tool names into human-readable activity titles", () => {
+    render(
+      <MessageBubble
+        message={buildMessage({
+          toolActivity: [
+            {
+              toolCallId: "call_1",
+              name: "system_run_app",
+              argsSummary: "Notepad",
+              resultSummary: "opened",
+              ok: true,
+            },
+          ],
+        })}
+        onDelete={() => undefined}
+        onRegenerate={() => undefined}
+      />,
+    );
+    expect(screen.getByText("Open Application")).toBeTruthy();
+    expect(screen.getByText("succeeded")).toBeTruthy();
   });
 });

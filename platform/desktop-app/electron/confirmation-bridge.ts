@@ -25,7 +25,12 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  */
 export interface ConfirmationBridge {
   /** Shows a real confirmation dialog and resolves to the user's actual decision — `false` if no renderer is available, or if the person doesn't respond within the timeout. */
-  prompt(title: string, message: string): Promise<boolean>;
+  prompt(
+    title: string,
+    message: string,
+    approveLabel?: string,
+    denyLabel?: string,
+  ): Promise<boolean>;
 }
 
 export function createConfirmationBridge(
@@ -51,7 +56,12 @@ export function createConfirmationBridge(
     },
   );
 
-  async function prompt(title: string, message: string): Promise<boolean> {
+  async function prompt(
+    title: string,
+    message: string,
+    approveLabel?: string,
+    denyLabel?: string,
+  ): Promise<boolean> {
     const webContents = getRendererWebContents();
     if (!webContents || webContents.isDestroyed()) {
       log.warn("no live renderer to show a confirmation dialog; denying by default", { title });
@@ -74,7 +84,13 @@ export function createConfirmationBridge(
         resolve(approved);
       });
 
-      const payload: ConfirmationRequestPayload = { id, title, message };
+      const payload: ConfirmationRequestPayload = {
+        id,
+        title,
+        message,
+        ...(approveLabel ? { approveLabel } : {}),
+        ...(denyLabel ? { denyLabel } : {}),
+      };
       webContents.send(IPC_CHANNELS.confirmationRequested, payload);
     });
   }

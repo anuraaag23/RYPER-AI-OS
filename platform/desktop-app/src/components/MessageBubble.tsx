@@ -8,6 +8,43 @@ export interface MessageBubbleProps {
   readonly onRegenerate: (id: string) => void;
 }
 
+export function formatToolName(name: string): string {
+  const map: Record<string, string> = {
+    system_run_app: "Open Application",
+    open_application: "Open Application",
+    close_application: "Close Application",
+    system_power_query: "Check Power Status",
+    system_power_set: "Power Action",
+    get_power_info: "Check Power Status",
+    system_volume_set: "Adjust Volume",
+    system_volume_query: "Check Volume",
+    set_volume: "Adjust Volume",
+    volume_up: "Volume Up",
+    volume_down: "Volume Down",
+    mute: "Mute Audio",
+    unmute: "Unmute Audio",
+    system_open_file: "Open File",
+    system_browser_open: "Open Browser",
+    open_url: "Open Browser",
+    system_clipboard_read: "Read Clipboard",
+    system_clipboard_write: "Copy to Clipboard",
+    device_media_control: "Media Control",
+    file_search: "Find Files",
+    search_files: "Find Files",
+    read_text_file: "Read File",
+    read_file: "Read File",
+    list_files: "List Files",
+    list_windows: "List Windows",
+    focus_window: "Switch Window",
+  };
+  if (map[name]) return map[name];
+  return name
+    .replace(/^system_/, "")
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export function MessageBubble({
   message,
   onDelete,
@@ -43,7 +80,9 @@ export function MessageBubble({
                   <span className="tool-activity-status" aria-hidden="true">
                     {tool.ok ? "✓" : "✗"}
                   </span>
-                  <span className="tool-activity-name">{tool.name}</span>
+                  <span className="tool-activity-name" title={tool.name}>
+                    {formatToolName(tool.name)}
+                  </span>
                   <span className="tool-activity-label">{tool.ok ? "succeeded" : "failed"}</span>
                 </summary>
                 <div className="tool-activity-detail">
@@ -75,7 +114,14 @@ export function MessageBubble({
         <button type="button" onClick={() => onDelete(message.id)} aria-label="Delete message">
           Delete
         </button>
-        {message.routingTarget && <span className="message-routing">{message.routingTarget}</span>}
+        {message.routingTarget && (
+          <span
+            className={`message-routing message-routing--${message.routingTarget}`}
+            title={message.routingTarget === "local" ? "Processed on this device" : "Processed in cloud"}
+          >
+            {message.routingTarget === "local" ? "🔒 On-Device (Private)" : "☁️ Cloud AI"}
+          </span>
+        )}
       </div>
     </div>
   );

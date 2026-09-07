@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { IPC_CHANNELS } from "../electron/ipc-contract.js";
+import { IPC_CHANNELS, type ConfirmationRequestPayload } from "../electron/ipc-contract.js";
 import { createConfirmationBridge } from "../electron/confirmation-bridge.js";
+import { describeCapabilityRequest } from "../electron/capability-presentation.js";
 
 /**
  * `IpcMain`/`WebContents` are Electron runtime types this sandbox
@@ -139,5 +140,44 @@ describe("ConfirmationBridge — real main<->renderer round trip (docs/adr/0032)
 
     await expect(first).resolves.toBe(true);
     await expect(second).resolves.toBe(false);
+  });
+
+  it("passes approveLabel and denyLabel to the renderer payload", async () => {
+    const ipcMain = new FakeIpcMain();
+    const webContents = new FakeWebContents();
+    const bridge = createConfirmationBridge(ipcMain as never, () => webContents as never);
+
+    const promptPromise = bridge.prompt(
+      "Permission needed",
+      "RYPER wants to open an application",
+      "Allow once",
+      "Deny",
+    );
+
+    expect(webContents.sent).toHaveLength(1);
+    const payload = webContents.sent[0]?.payload as ConfirmationRequestPayload;
+    expect(payload.approveLabel).toBe("Allow once");
+    expect(payload.denyLabel).toBe("Deny");
+    expect(payload.title).toBe("Permission needed");
+
+    await ipcMain.invokeFromRenderer(IPC_CHANNELS.respondToConfirmation, payload.id, true);
+    await expect(promptPromise).resolves.toBe(true);
+  });
+
+  it("translates capability requests into user-friendly prompts without leaking internal IDs", () => {
+    const presentation = describeCapabilityRequest({
+      actorId: "ai-orchestrator",
+      capability: "automation.execute",
+      justification: "invoke application_control.launch",
+    });
+
+    expect(presentation.title).toBe("Permission needed");
+    expect(presentation.category).toBe("Application Control");
+    expect(presentation.approveLabel).toBe("Allow once");
+    expect(presentation.denyLabel).toBe("Deny");
+    expect(presentation.message).toContain("Application Control");
+    expect(presentation.message).not.toContain("ai-orchestrator");
+    expect(presentation.message).not.toContain("automation.execute");
+    expect(presentation.message).not.toContain("invoke application_control.launch");
   });
 });

@@ -84,4 +84,27 @@ describe("ConfirmationDialog", () => {
     expect(respondToConfirmation).toHaveBeenCalledWith("req-1", true);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
+
+  it("renders custom 'Allow once' and 'Deny' labels for capability consent requests", () => {
+    render(<ConfirmationDialog />);
+    act(() =>
+      fire({
+        id: "perm-1",
+        title: "Permission needed",
+        message: "RYPER wants to open an application on your computer.",
+        approveLabel: "Allow once",
+        denyLabel: "Deny",
+      }),
+    );
+    expect(screen.getByText("Permission needed")).toBeTruthy();
+    expect(screen.getByText("RYPER wants to open an application on your computer.")).toBeTruthy();
+    const allowOnce = screen.getByText("Allow once");
+    const deny = screen.getByText("Deny");
+    expect(allowOnce).toBeTruthy();
+    expect(deny).toBeTruthy();
+
+    fireEvent.click(allowOnce);
+    expect(respondToConfirmation).toHaveBeenCalledWith("perm-1", true);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
 });

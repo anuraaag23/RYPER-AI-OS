@@ -5,10 +5,14 @@ import type {
   VoiceOrbStatus,
   ConnectionStatus,
   CurrentReferencePayload,
+  AIStatusPayload,
+  TurnProgressPayload,
 } from "../../electron/ipc-contract.js";
+import { sanitizeUserFacingError } from "../lib/user-error-sanitizer.js";
 
 export function useConversations(): {
   conversations: readonly ConversationSummary[];
+  loaded: boolean;
   refresh: () => Promise<void>;
   create: (title?: string) => Promise<ConversationSummary>;
   rename: (id: string, title: string) => Promise<void>;
@@ -16,10 +20,12 @@ export function useConversations(): {
   remove: (id: string) => Promise<void>;
 } {
   const [conversations, setConversations] = useState<readonly ConversationSummary[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     const list = await window.ryper.listConversations();
     setConversations(list);
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -64,7 +70,7 @@ export function useConversations(): {
     [refresh],
   );
 
-  return { conversations, refresh, create, rename, archive, remove };
+  return { conversations, loaded, refresh, create, rename, archive, remove };
 }
 
 export function useMessages(conversationId: string | undefined): {
@@ -74,20 +80,24 @@ export function useMessages(conversationId: string | undefined): {
   remove: (messageId: string) => Promise<void>;
   regenerate: (messageId: string) => Promise<void>;
   sending: boolean;
+  progress: TurnProgressPayload | undefined;
   /**
    * Real, visible failure state (Tier 1 UI brief section 12 — "no
-   * silent success/failure"): previously a rejected `sendMessage()`
-   * call left `sending` reset with nothing else shown, so a genuine AI
-   * or tool failure was invisible in the UI. `null` when the last turn
-   * succeeded or none has run yet.
+   * silent success/failure"): sanitized for friendly presentation
+   * without leaking raw technical traces.
    */
   error: string | undefined;
+  canRetry: boolean;
+  retry: () => void;
   clearError: () => void;
   cancel: () => void;
 } {
   const [messages, setMessages] = useState<readonly StoredMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<TurnProgressPayload | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [canRetry, setCanRetry] = useState(false);
+  const [lastFailedContent, setLastFailedContent] = useState<string | undefined>(undefined);
   const activeTurnId = useState(() => ({ current: undefined as string | undefined }))[0];
 
   const refresh = useCallback(async () => {
@@ -115,26 +125,58 @@ export function useMessages(conversationId: string | undefined): {
     [conversationId, refresh],
   );
 
+  useEffect(() => {
+    if (typeof window?.ryper?.onTurnProgress === "function") {
+      return window.ryper.onTurnProgress((p) => {
+        if (p.conversationId === conversationId) {
+          setProgress(p);
+        }
+      });
+    }
+  }, [conversationId]);
+
   const send = useCallback(
     async (content: string) => {
       if (!conversationId || content.trim().length === 0) return;
       setSending(true);
       setError(undefined);
+      setCanRetry(false);
       const turnId = crypto.randomUUID();
       activeTurnId.current = turnId;
+      setProgress({
+        conversationId,
+        turnId,
+        stage: "thinking",
+        label: "Thinking…",
+      });
       try {
         await window.ryper.sendMessage({ conversationId, content, turnId });
+        setLastFailedContent(undefined);
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const sanitized = sanitizeUserFacingError(err);
+        setError(sanitized.message);
+        setCanRetry(sanitized.canRetry);
+        if (sanitized.canRetry) {
+          setLastFailedContent(content);
+        } else {
+          setLastFailedContent(undefined);
+        }
         await refresh();
       } finally {
         activeTurnId.current = undefined;
         setSending(false);
+        setProgress(undefined);
       }
     },
     [conversationId, refresh, activeTurnId],
   );
+
+  const retry = useCallback((): void => {
+    if (lastFailedContent && canRetry) {
+      void send(lastFailedContent);
+    }
+  }, [lastFailedContent, canRetry, send]);
 
   const remove = useCallback(
     async (messageId: string) => {
@@ -150,14 +192,23 @@ export function useMessages(conversationId: string | undefined): {
       if (!conversationId) return;
       setSending(true);
       setError(undefined);
+      setCanRetry(false);
+      setProgress({
+        conversationId,
+        stage: "thinking",
+        label: "Thinking…",
+      });
       try {
         await window.ryper.regenerateMessage(conversationId, messageId);
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const sanitized = sanitizeUserFacingError(err);
+        setError(sanitized.message);
+        setCanRetry(sanitized.canRetry);
         await refresh();
       } finally {
         setSending(false);
+        setProgress(undefined);
       }
     },
     [conversationId, refresh],
@@ -174,10 +225,44 @@ export function useMessages(conversationId: string | undefined): {
     remove,
     regenerate,
     sending,
+    progress,
     error,
-    clearError: () => setError(undefined),
+    canRetry,
+    retry,
+    clearError: () => {
+      setError(undefined);
+      setCanRetry(false);
+      setLastFailedContent(undefined);
+    },
     cancel,
   };
+}
+
+export function useAIStatus(): AIStatusPayload {
+  const [status, setStatus] = useState<AIStatusPayload>({
+    mode: "local",
+    label: "Local AI • Qwen3-8B",
+    ready: true,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (typeof window?.ryper?.getAIStatus === "function") {
+      void window.ryper
+        .getAIStatus()
+        .then((s) => {
+          if (!cancelled && s) setStatus(s);
+        })
+        .catch(() => {
+          // Fallback gracefully to default
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return status;
 }
 
 export function useVoiceState(): { status: VoiceOrbStatus; connection: ConnectionStatus } {

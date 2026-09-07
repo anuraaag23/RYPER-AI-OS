@@ -8,10 +8,55 @@ import {
   type PowerConfirmationManager,
 } from "./power-confirmation.js";
 import { desktopActions } from "./desktop-actions.js";
-import type { ToolActivityEntry } from "./ipc-contract.js";
+import type { ToolActivityEntry, TurnProgressStage } from "./ipc-contract.js";
 import { createToolActivityCollector } from "./tool-activity.js";
 
 const log = createLogger("desktop-app:text-chat");
+
+export type TurnProgressCallback = (progress: {
+  readonly stage: TurnProgressStage;
+  readonly label: string;
+}) => void;
+
+function describeToolProgress(toolName: string, args: Record<string, unknown>): string {
+  switch (toolName) {
+    case "open_application": {
+      const app = typeof args["app"] === "string" ? args["app"].trim() : "";
+      return app ? `Opening ${app}…` : "Opening application…";
+    }
+    case "close_application": {
+      const app = typeof args["app"] === "string" ? args["app"].trim() : "";
+      return app ? `Closing ${app}…` : "Closing application…";
+    }
+    case "get_power_info":
+      return "Checking your battery…";
+    case "volume_up":
+    case "volume_down":
+    case "set_volume":
+    case "mute":
+    case "unmute":
+      return "Adjusting volume…";
+    case "list_files":
+    case "read_file":
+    case "search_files":
+    case "get_folder_path":
+      return "Checking files…";
+    case "list_windows":
+    case "get_active_window":
+    case "focus_window":
+    case "switch_window":
+      return "Finding window…";
+    case "get_system_info":
+    case "list_displays":
+    case "list_devices":
+      return "Checking system info…";
+    case "open_url":
+    case "smart_open":
+      return "Opening link…";
+    default:
+      return "Using your PC…";
+  }
+}
 
 /**
  * Closes the most severe gap found during the Tier 1 UI-integration
@@ -69,9 +114,33 @@ export async function runTextTurn(
   device: DeviceState,
   deps: TextTurnDeps,
   signal?: AbortSignal,
+  onProgress?: TurnProgressCallback,
 ): Promise<TextTurnResult> {
   const routingTarget: "local" | "cloud" =
     deps.cloudLLMConfigured && device.online ? "cloud" : "local";
+
+  onProgress?.({ stage: "thinking", label: "Thinking…" });
+
+  let warmupTimer: NodeJS.Timeout | undefined;
+  let hasReceivedFirstActivity = false;
+
+  if (routingTarget === "local" && onProgress) {
+    warmupTimer = setTimeout(() => {
+      if (!hasReceivedFirstActivity) {
+        onProgress({
+          stage: "warmup",
+          label: "The local AI is warming up. This can take a little longer the first time.",
+        });
+      }
+    }, 7_000);
+  }
+
+  const clearWarmup = () => {
+    if (warmupTimer) {
+      clearTimeout(warmupTimer);
+      warmupTimer = undefined;
+    }
+  };
 
   const confirmation = await tryResolvePowerConfirmation(
     content,
@@ -81,12 +150,15 @@ export async function runTextTurn(
     signal,
   );
   if (confirmation) {
+    clearWarmup();
     return { reply: confirmation.reply, routingTarget, toolActivity: [] };
   }
 
   let text = "";
   let sawError = false;
   let errorMessage: string | undefined;
+  let hasCompletedTool = false;
+  let lastExecutedTool: string | undefined;
   const toolActivity = createToolActivityCollector();
 
   try {
@@ -94,17 +166,42 @@ export async function runTextTurn(
       device,
       ...(signal ? { signal } : {}),
     })) {
+      if (!hasReceivedFirstActivity) {
+        hasReceivedFirstActivity = true;
+        clearWarmup();
+      }
+
       toolActivity.onEvent(event);
       if (event.type === "text_delta") {
+        if (text.length === 0) {
+          onProgress?.({ stage: "generating", label: "Finishing up…" });
+        }
         text += event.delta;
       } else if (event.type === "tool_call") {
         log.info("AI orchestrator invoking tool", { name: event.toolCall.name });
+        let parsedArgs: Record<string, unknown> = {};
+        if (typeof event.toolCall.arguments === "string") {
+          try {
+            parsedArgs = JSON.parse(event.toolCall.arguments) as Record<string, unknown>;
+          } catch {
+            // Fallback to empty
+          }
+        } else if (
+          typeof event.toolCall.arguments === "object" &&
+          event.toolCall.arguments !== null
+        ) {
+          parsedArgs = event.toolCall.arguments as Record<string, unknown>;
+        }
+        const label = describeToolProgress(event.toolCall.name, parsedArgs);
+        onProgress?.({ stage: "tool", label });
       } else if (event.type === "tool_result") {
-        // Authoritative — the tool's own ok/content, never inferred
-        // from how the model narrates it afterward (see docs/adr/0023).
         if (!event.ok) {
           log.warn("tool call failed", { name: event.name, content: event.content });
+        } else {
+          hasCompletedTool = true;
+          lastExecutedTool = event.name;
         }
+        onProgress?.({ stage: "tool", label: "Working on it…" });
       } else if (event.type === "error") {
         sawError = true;
         errorMessage = event.message;
@@ -112,6 +209,7 @@ export async function runTextTurn(
       }
     }
   } catch (err) {
+    clearWarmup();
     const aborted =
       signal?.aborted === true ||
       (err instanceof DOMException && err.name === "AbortError") ||
@@ -125,11 +223,24 @@ export async function runTextTurn(
         cancelled: true,
       };
     }
+    if (hasCompletedTool && lastExecutedTool) {
+      const toolErr = new Error(
+        `action_completed:${lastExecutedTool}:${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw toolErr;
+    }
     throw err;
+  } finally {
+    clearWarmup();
   }
 
   const trimmed = text.trim();
   if (trimmed.length === 0) {
+    if (hasCompletedTool && lastExecutedTool) {
+      throw new Error(
+        `action_completed:${lastExecutedTool}:${sawError ? errorMessage ?? "unknown" : "empty response"}`,
+      );
+    }
     throw new Error(
       sawError
         ? `the AI orchestrator reported an error: ${errorMessage ?? "unknown"}`

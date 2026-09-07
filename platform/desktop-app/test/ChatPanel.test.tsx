@@ -8,6 +8,8 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   StoredMessage,
+  AIStatusPayload,
+  TurnProgressPayload,
 } from "../electron/ipc-contract.js";
 
 afterEach(cleanup);
@@ -31,6 +33,8 @@ function buildFakeRyper(overrides: {
   currentReference?: CurrentReferencePayload | undefined;
   sendMessage?: (request: SendMessageRequest) => Promise<SendMessageResponse>;
   audioStatus?: AudioStatusPayload;
+  aiStatus?: AIStatusPayload;
+  onTurnProgress?: (handler: (progress: TurnProgressPayload) => void) => () => void;
 }) {
   const messages = overrides.messages ?? [];
   return {
@@ -58,16 +62,17 @@ function buildFakeRyper(overrides: {
     stopVoiceTurn: vi.fn(async () => undefined),
     onVoiceState: vi.fn(() => () => undefined),
     onConversationUpdated: vi.fn(() => () => undefined),
-    // Composer's own microphone control (see `Composer.tsx`) now also
-    // calls these directly, independent of `ChatPanel`'s own
-    // `useVoiceState`/`onOrbPress` — same real `window.ryper` surface,
-    // just a second real entry point into it.
     getAudioStatus: vi.fn(
       async (): Promise<AudioStatusPayload> =>
         overrides.audioStatus ?? { microphone: "available", speaker: "available" },
     ),
     requestAudioPermission: vi.fn(async () => true),
     onAudioStatusChanged: vi.fn(() => () => undefined),
+    getAIStatus: vi.fn(
+      async (): Promise<AIStatusPayload> =>
+        overrides.aiStatus ?? { mode: "local", label: "Local AI • Qwen3-8B", ready: true },
+    ),
+    onTurnProgress: overrides.onTurnProgress ?? vi.fn(() => () => undefined),
   };
 }
 
@@ -82,9 +87,13 @@ describe("ChatPanel", () => {
     installFakeRyper({});
   });
 
-  it("shows the empty-state prompt when no conversation is selected", () => {
+  it("shows the welcome hero, suggestion chips, and persistent composer when no conversation is selected (P0-2)", () => {
     render(<ChatPanel conversationId={undefined} />);
-    expect(screen.getByText("Select or start a conversation to begin.")).toBeTruthy();
+    expect(screen.getByText("Hi, I'm RYPER.")).toBeTruthy();
+    expect(screen.getByText("Check my battery")).toBeTruthy();
+    expect(screen.getByText("Open Notepad")).toBeTruthy();
+    expect(screen.getByText("What can you do?")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Message Ryper…")).toBeTruthy();
   });
 
   it("loads and renders existing messages for the selected conversation", async () => {
@@ -120,10 +129,36 @@ describe("ChatPanel", () => {
     expect(screen.queryByText(/Referring to/)).toBeNull();
   });
 
-  it("shows a real, dismissible error banner when a send genuinely fails — no silent failure", async () => {
+  it("shows the transparent, friendly AI status indicator in the header (P1-1)", async () => {
+    installFakeRyper({
+      aiStatus: { mode: "local", label: "Local AI • Qwen3-8B", ready: true },
+    });
+    render(<ChatPanel conversationId="c1" />);
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: "AI Status: Local AI • Qwen3-8B" })).toBeTruthy(),
+    );
+    expect(screen.getByText("Local AI • Qwen3-8B")).toBeTruthy();
+  });
+
+  it("shows a sanitized friendly error banner with a safe Retry button on failure (P1-2)", async () => {
+    let attempts = 0;
     const fake = installFakeRyper({
-      sendMessage: vi.fn(async () => {
-        throw new Error("the AI orchestrator returned an empty response");
+      sendMessage: vi.fn(async (request: SendMessageRequest) => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error("ProviderError: connect ECONNREFUSED 127.0.0.1:8090");
+        }
+        return {
+          content: "success on retry",
+          retrievedContext: [],
+          message: {
+            id: "reply-retry",
+            conversationId: request.conversationId,
+            role: "assistant",
+            content: "success on retry",
+            createdAt: new Date().toISOString(),
+          },
+        };
       }),
     });
     render(<ChatPanel conversationId="c1" />);
@@ -132,12 +167,31 @@ describe("ChatPanel", () => {
     fireEvent.click(screen.getByText("Send"));
 
     await waitFor(() =>
-      expect(screen.getByText("the AI orchestrator returned an empty response")).toBeTruthy(),
+      expect(
+        screen.getByText(
+          "RYPER couldn't complete that request. The local AI isn't responding right now.",
+        ),
+      ).toBeTruthy(),
     );
-    expect(fake.sendMessage).toHaveBeenCalledOnce();
+    // Never leaks raw technical string
+    expect(screen.queryByText(/ECONNREFUSED/)).toBeNull();
+    expect(screen.queryByText(/8090/)).toBeNull();
 
-    fireEvent.click(screen.getByLabelText("Dismiss error"));
-    expect(screen.queryByText("the AI orchestrator returned an empty response")).toBeNull();
+    // Verify Retry button is visible and works
+    const retryBtn = screen.getByRole("button", { name: "Retry request" });
+    expect(retryBtn).toBeTruthy();
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => expect(fake.sendMessage).toHaveBeenCalledTimes(2));
+
+    // After success, error banner is gone
+    await waitFor(() =>
+      expect(
+        screen.queryByText(
+          "RYPER couldn't complete that request. The local AI isn't responding right now.",
+        ),
+      ).toBeNull(),
+    );
   });
 
   it("shows a Cancel control while a turn is in flight, wired to the real cancelTurn IPC call", async () => {
@@ -173,5 +227,25 @@ describe("ChatPanel", () => {
         },
       });
     });
+  });
+
+  it("clicking a suggestion chip sends the prompt through the normal pipeline", async () => {
+    const fake = installFakeRyper({ messages: [] });
+    render(<ChatPanel conversationId="c1" />);
+    const chip = screen.getByText("Check my battery");
+    fireEvent.click(chip);
+    await waitFor(() => expect(fake.sendMessage).toHaveBeenCalledWith({
+      conversationId: "c1",
+      content: "Check my battery",
+      turnId: expect.any(String),
+    }));
+  });
+
+  it("invokes onStartConversation when submitting with no active conversation", async () => {
+    const onStart = vi.fn();
+    render(<ChatPanel conversationId={undefined} onStartConversation={onStart} />);
+    const chip = screen.getByText("Open Notepad");
+    fireEvent.click(chip);
+    expect(onStart).toHaveBeenCalledWith("Open Notepad");
   });
 });

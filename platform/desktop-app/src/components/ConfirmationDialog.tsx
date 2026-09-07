@@ -87,10 +87,14 @@ export function ConfirmationDialog(): JSX.Element | null {
             className="confirmation-deny"
             onClick={() => respond(false)}
           >
-            Deny
+            {pending.denyLabel ?? "Deny"}
           </button>
-          <button type="button" className="confirmation-approve" onClick={() => respond(true)}>
-            Approve
+          <button
+            type="button"
+            className="confirmation-approve"
+            onClick={() => respond(true)}
+          >
+            {pending.approveLabel ?? "Approve"}
           </button>
         </div>
       </div>

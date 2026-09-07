@@ -52,6 +52,7 @@ export function VoiceOrb({ state, connection, onPress }: VoiceOrbProps): JSX.Ele
   const connectionLabel = CONNECTION_LABEL[connection];
   const scale = viewModel.pulse ? 1 + Math.sin(pulsePhase * Math.PI * 2) * 0.06 : 1;
   const currentLabel = connectionLabel ?? STATE_LABEL[viewModel.state];
+  const tooltip = viewModel.state === "idle" ? "Tap to talk (Ctrl + Shift + Space)" : currentLabel;
 
   return (
     <div className="voice-orb-wrap" role="group" aria-label="Voice assistant">
@@ -62,6 +63,7 @@ export function VoiceOrb({ state, connection, onPress }: VoiceOrbProps): JSX.Ele
         onClick={onPress}
         aria-pressed={viewModel.state !== "idle"}
         aria-label={currentLabel}
+        title={tooltip}
       >
         <span className="glass-highlight" />
         <span className="voice-orb-core" />

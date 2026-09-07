@@ -134,4 +134,61 @@ describe("registerIpcHandlers — real wiring over a real bootstrapped core", ()
     const messages = await core.conversations.listMessages(conversation.id);
     expect(messages.some((m) => m.id === message.id)).toBe(false);
   });
+
+  it("getAIStatus returns a friendly, transparent AI status payload (P1-1)", async () => {
+    await setup();
+    const status = (await invoke(IPC_CHANNELS.getAIStatus)) as {
+      mode: string;
+      label: string;
+      ready: boolean;
+    };
+    expect(["local", "cloud", "heuristic"]).toContain(status.mode);
+    expect(typeof status.label).toBe("string");
+    expect(status.label.length).toBeGreaterThan(0);
+    expect(status.ready).toBe(true);
+    // Verifies no raw technical strings are leaked
+    expect(status.label).not.toContain("8090");
+    expect(status.label).not.toContain("llama-cpp-local");
+    expect(status.label).not.toContain("localhost");
+  });
+
+  it("sendMessage broadcasts turnProgress events to chat windows", async () => {
+    const progressEvents: unknown[] = [];
+    const fakeWebContents = {
+      isDestroyed: () => false,
+      send: (channel: string, payload: unknown) => {
+        if (channel === IPC_CHANNELS.turnProgress) {
+          progressEvents.push(payload);
+        }
+      },
+    };
+
+    const core = await bootstrapCore(
+      {
+        conversationsFile: join(dir, "conversations.json"),
+        settingsFile: join(dir, "settings.json"),
+        modelCacheDir: join(dir, "models"),
+      },
+      () => undefined,
+      async () => true,
+    );
+    registerIpcHandlers({
+      core,
+      getSettingsWindows: () => [],
+      getChatWindows: () => [fakeWebContents as any],
+      openSettingsWindow: () => undefined,
+      startVoiceTurn: async () => undefined,
+      stopVoiceTurn: async () => undefined,
+    });
+
+    const conversation = await core.conversations.create();
+    await invoke(IPC_CHANNELS.sendMessage, {
+      conversationId: conversation.id,
+      content: "hi",
+    });
+
+    expect(progressEvents.length).toBeGreaterThan(0);
+    expect((progressEvents[0] as any).stage).toBe("thinking");
+    expect((progressEvents[0] as any).label).toBe("Thinking…");
+  });
 });

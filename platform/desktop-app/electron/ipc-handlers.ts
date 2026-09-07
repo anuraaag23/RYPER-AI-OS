@@ -1,16 +1,19 @@
-import { ipcMain, type BrowserWindow, type WebContents } from "electron";
+import { app, shell, ipcMain, BrowserWindow, type WebContents } from "electron";
 import { createLogger } from "@ryper/logging";
 import type { RyperCore } from "./core-bootstrap.js";
 import { runTextTurn } from "./text-chat.js";
 import {
   IPC_CHANNELS,
+  type AIStatusPayload,
   type AppSettings,
   type AudioAvailability,
   type AudioDeviceKindPayload,
   type AudioStatusPayload,
   type SendMessageRequest,
   type SendMessageResponse,
+  type TurnProgressPayload,
 } from "./ipc-contract.js";
+import { KNOWN_PERMISSION_CATEGORIES } from "./capability-presentation.js";
 
 const log = createLogger("desktop-app:ipc-handlers");
 
@@ -55,6 +58,7 @@ export const ALLOWED_SETTING_KEYS = new Set([
   "preferredBrowserId",
   "voiceLanguage",
   "ttsVoice",
+  "hasCompletedOnboarding",
 ]);
 
 export function sanitizeSettingsPatch(patch: unknown): Partial<AppSettings> {
@@ -79,6 +83,7 @@ export interface IpcHandlerDeps {
   readonly openSettingsWindow: () => void;
   readonly startVoiceTurn: () => Promise<void>;
   readonly stopVoiceTurn: () => Promise<void>;
+  readonly getChatWindows?: () => readonly WebContents[];
 }
 
 /**
@@ -89,6 +94,81 @@ export interface IpcHandlerDeps {
  */
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const { core } = deps;
+
+  function broadcastProgress(progress: TurnProgressPayload): void {
+    try {
+      const windows = deps.getChatWindows
+        ? deps.getChatWindows()
+        : typeof BrowserWindow !== "undefined" && typeof BrowserWindow.getAllWindows === "function"
+          ? BrowserWindow.getAllWindows().map((w) => w.webContents)
+          : [];
+      for (const wc of windows) {
+        if (!wc.isDestroyed()) {
+          wc.send(IPC_CHANNELS.turnProgress, progress);
+        }
+      }
+    } catch (err) {
+      log.warn("failed to broadcast turn progress", { error: String(err) });
+    }
+  }
+
+  ipcMain.handle(IPC_CHANNELS.getAIStatus, async (): Promise<AIStatusPayload> => {
+    if (core.voice.localLLMActive) {
+      try {
+        const res = await fetch("http://127.0.0.1:8090/health", { signal: AbortSignal.timeout(800) }).catch(() => null);
+        if (res && res.ok) {
+          return {
+            mode: "local",
+            label: "Local AI • Qwen3-8B",
+            ready: true,
+            readinessState: "ready",
+            detail: "Local AI engine is running and ready.",
+          };
+        }
+        return {
+          mode: "local",
+          label: "Local AI Offline",
+          ready: false,
+          readinessState: "failed",
+          detail: "Local AI service is not running or not responding.",
+        };
+      } catch {
+        return {
+          mode: "local",
+          label: "Local AI Offline",
+          ready: false,
+          readinessState: "failed",
+          detail: "Local AI service is not responding.",
+        };
+      }
+    }
+    if (core.voice.cloudLLMConfigured) {
+      return {
+        mode: "cloud",
+        label: "Cloud AI",
+        ready: true,
+        readinessState: "ready",
+        detail: "Connected to cloud AI service.",
+      };
+    }
+    const diag = core.voice.llmDiagnostics;
+    if (diag && (diag.status === "binary-missing" || diag.status === "model-missing")) {
+      return {
+        mode: "heuristic",
+        label: "Running locally",
+        ready: true,
+        readinessState: "missing",
+        detail: "Local AI model not detected. Using local fallback engine.",
+      };
+    }
+    return {
+      mode: "heuristic",
+      label: "Running locally",
+      ready: true,
+      readinessState: "ready",
+      detail: "Basic local assistance is available.",
+    };
+  });
 
   ipcMain.handle(IPC_CHANNELS.listConversations, () => core.conversations.list());
 
@@ -145,6 +225,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           cloudLLMConfigured: core.voice.cloudLLMConfigured,
         },
         controller?.signal,
+        (progress) => {
+          broadcastProgress({
+            conversationId: request.conversationId,
+            ...(request.turnId !== undefined ? { turnId: request.turnId } : {}),
+            stage: progress.stage,
+            label: progress.label,
+          });
+        },
       );
     } finally {
       if (request.turnId) inFlightTurns.delete(request.turnId);
@@ -238,6 +326,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           capabilityManager: core.capabilityManager,
           powerConfirmation: core.voice.powerConfirmation,
           cloudLLMConfigured: core.voice.cloudLLMConfigured,
+        },
+        undefined,
+        (progress) => {
+          broadcastProgress({
+            conversationId: convId,
+            stage: progress.stage,
+            label: progress.label,
+          });
         },
       );
       const message = await core.conversations.appendMessage(
@@ -379,6 +475,52 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return core.voice.deviceManager.requestPermission(kind);
     },
   );
+
+  ipcMain.handle(IPC_CHANNELS.listPermissions, () => {
+    return KNOWN_PERMISSION_CATEGORIES.map((item) => ({
+      id: item.capability,
+      category: item.category,
+      description: item.description,
+      granted: core.broker.hasGrant("ai-orchestrator", item.capability),
+      isSessionOnly: item.capability !== "system.power",
+    }));
+  });
+
+  ipcMain.handle(IPC_CHANNELS.resetPermissions, () => {
+    for (const item of KNOWN_PERMISSION_CATEGORIES) {
+      if (item.capability !== "notifications") {
+        core.broker.revoke("ai-orchestrator", item.capability);
+      }
+    }
+    log.info("session permissions reset");
+  });
+
+  ipcMain.handle(IPC_CHANNELS.restartLocalAI, async (): Promise<{ ok: boolean; message: string }> => {
+    log.info("restartLocalAI requested via IPC");
+    try {
+      const res = await fetch("http://127.0.0.1:8090/health", { signal: AbortSignal.timeout(2500) }).catch(() => null);
+      if (res && res.ok) {
+        return { ok: true, message: "Local AI engine is active and ready." };
+      }
+      return {
+        ok: false,
+        message: "Local AI is not responding. Please ensure your local AI server is active.",
+      };
+    } catch (err) {
+      log.warn("restartLocalAI check error", { error: String(err) });
+      return { ok: false, message: "Could not restart local AI right now." };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.openLogsFolder, async (): Promise<void> => {
+    log.info("openLogsFolder invoked via IPC");
+    try {
+      const logsPath = app.getPath("logs");
+      await shell.openPath(logsPath);
+    } catch (err) {
+      log.warn("failed to open logs folder", { error: String(err) });
+    }
+  });
 
   log.info("IPC handlers registered", { channelCount: Object.keys(IPC_CHANNELS).length });
 }

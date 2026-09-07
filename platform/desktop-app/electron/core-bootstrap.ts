@@ -43,6 +43,7 @@ function detectPlatformId(): PlatformId {
 export interface RyperCore {
   readonly webShell: WebShell;
   readonly capabilityManager: CapabilityManager;
+  readonly broker: CapabilityBroker;
   readonly conversations: ConversationStore;
   readonly settings: SettingsStore;
   readonly voice: VoiceBundle;
@@ -238,5 +239,5 @@ export async function bootstrapCore(
   }
 
   log.info("core bootstrap complete");
-  return { webShell, capabilityManager, conversations, settings, voice, windowsAdapter, getHealth };
+  return { webShell, capabilityManager, broker, conversations, settings, voice, windowsAdapter, getHealth };
 }

@@ -1,6 +1,9 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 app.setName("RYPER AI OS");
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+if (process.env["RYPER_TEST_PROFILE"]) {
+  app.setPath("userData", process.env["RYPER_TEST_PROFILE"]);
+}
 if (process.platform === "win32") {
   app.setAppUserModelId("com.ryper.os");
 }
@@ -12,6 +15,7 @@ import { createMainWindow, createSettingsWindow } from "./windows.js";
 import { createTray, destroyTray, getTrayStatus, setTrayTooltip } from "./tray.js";
 import { IPC_CHANNELS, type StartupDiagnostics } from "./ipc-contract.js";
 import { createConfirmationBridge } from "./confirmation-bridge.js";
+import { describeCapabilityRequest } from "./capability-presentation.js";
 import { createVoiceTurnRecorder, type VoiceTurnRecorder } from "./voice-turn-recorder.js";
 
 const log = createLogger("desktop-app:main");
@@ -45,14 +49,19 @@ async function initialize(): Promise<void> {
     broadcastDiagnostics,
     // Real consent prompt: shows an actual dialog in the renderer and
     // waits for the person's real decision (denies on timeout or if no
-    // renderer is available â€” never silently grants).
-    async (request) =>
-      confirmationBridge.prompt(
-        "Permission needed",
-        `RYPER wants to use "${request.capability}" â€” ${request.justification}`,
-      ),
+    // renderer is available — never silently grants). Consumer-friendly
+    // presentation mapping strips internal capability/actor IDs (P0-1).
+    async (request) => {
+      const presentation = describeCapabilityRequest(request);
+      return confirmationBridge.prompt(
+        presentation.title,
+        presentation.message,
+        presentation.approveLabel,
+        presentation.denyLabel,
+      );
+    },
     // Phase 13.6: the real audio bridge talks to the main window's renderer over IPC
-    // (see docs/adr/0017) â€” `ipcMain` is the real singleton, `mainWindow` already
+    // (see docs/adr/0017) — `ipcMain` is the real singleton, `mainWindow` already
     // exists at this point (created just above), so this always resolves to a real,
     // live `WebContents` for the life of the app.
     {
@@ -60,12 +69,14 @@ async function initialize(): Promise<void> {
       getRendererWebContents: () => mainWindow?.webContents,
     },
     // Real destructive-action confirmer for shutdown/restart/sleep,
-    // file deletion, etc. â€” the *same* real dialog, since both are
+    // file deletion, etc. — the *same* real dialog, since both are
     // fundamentally "ask the person before doing something sensitive."
     async (request) =>
       confirmationBridge.prompt(
         `Confirm: ${request.action}`,
         `${request.reason} (${request.target})`,
+        "Approve",
+        "Deny",
       ),
   );
 
@@ -127,6 +138,8 @@ async function initialize(): Promise<void> {
     core,
     getSettingsWindows: () =>
       settingsWindow && !settingsWindow.isDestroyed() ? [settingsWindow.webContents] : [],
+    getChatWindows: () =>
+      mainWindow && !mainWindow.isDestroyed() ? [mainWindow.webContents] : [],
     openSettingsWindow: () => {
       if (settingsWindow && !settingsWindow.isDestroyed()) {
         settingsWindow.focus();

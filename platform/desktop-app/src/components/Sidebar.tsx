@@ -12,22 +12,7 @@ export interface SidebarProps {
   readonly onOpenSettings: () => void;
 }
 
-/**
- * Nav destinations the brief asks for (Memory, Plugins, Models,
- * Automation, Documents, Diagnostics) that this phase does not build a
- * real screen for — see `docs/PROJECT_STATE.md`'s known gaps. Shown as
- * honestly-labeled, disabled entries rather than either omitted (which
- * would understate the intended navigation shape) or built as fake
- * populated screens (which the brief explicitly forbids).
- */
-const COMING_SOON_SECTIONS = [
-  "Memory",
-  "Plugins",
-  "Models",
-  "Automation",
-  "Documents",
-  "Diagnostics",
-] as const;
+
 
 export function Sidebar(props: SidebarProps): JSX.Element {
   const [query, setQuery] = useState("");
@@ -115,15 +100,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       <div className="sidebar-section-label">Recent</div>
       <ul className="conversation-list">{recent.map(renderConversation)}</ul>
       <div className="sidebar-spacer" />
-      <div className="sidebar-section-label">More</div>
       <ul className="sidebar-nav-list">
-        {COMING_SOON_SECTIONS.map((label) => (
-          <li key={label}>
-            <button type="button" disabled title="Coming soon">
-              {label}
-            </button>
-          </li>
-        ))}
         <li>
           <button type="button" onClick={props.onOpenSettings}>
             Settings

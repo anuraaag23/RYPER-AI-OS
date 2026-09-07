@@ -4,6 +4,7 @@ import { CapabilityBroker } from "@ryper/security";
 import { createCapabilityManager } from "@ryper/platform-capability";
 import { createWindowsAdapter, WINDOWS_CAPABILITY_DESCRIPTORS } from "@ryper/windows-agent";
 import { buildDesktopToolDefinitions } from "../electron/desktop-tools.js";
+import { summarizeForDisplay } from "../electron/tool-activity.js";
 
 /**
  * Real, deterministic, always-run coverage for the CapabilityBroker
@@ -168,6 +169,68 @@ describe("audio: volume_up/set_volume/mute are gated via CapabilityManager's sel
         (e) =>
           e.capability === "automation.execute" && (e.result === "granted" || e.result === "used"),
       ),
+    ).toBe(true);
+  });
+
+  it("sanitizes open_application denial so internal capability/actor IDs are not leaked (P0-1)", async () => {
+    // Simulates user choosing "Deny"
+    const broker = new CapabilityBroker(() => false);
+    const capabilityManager = createCapabilityManager({
+      broker,
+      platformDetector: () => "windows",
+    });
+    const adapter = await createWindowsAdapter();
+    capabilityManager.registerAdapter(adapter);
+    for (const descriptor of WINDOWS_CAPABILITY_DESCRIPTORS) {
+      capabilityManager.registerCapability(descriptor);
+    }
+    const registry = new ToolRegistry(broker);
+    for (const tool of buildDesktopToolDefinitions(capabilityManager)) {
+      registry.register(tool);
+    }
+
+    const result = await registry.invoke(
+      { id: "call-open-1", name: "open_application", arguments: { app: "notepad" } },
+      { sessionId: "s1" },
+      "ai-orchestrator",
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("not granted");
+    const displaySummary = summarizeForDisplay(result.content);
+    expect(displaySummary).toBe("Permission was denied by the user. The action was cancelled.");
+    expect(displaySummary).not.toContain("automation.execute");
+    expect(displaySummary).not.toContain("ai-orchestrator");
+    expect(displaySummary).not.toContain("application_control");
+  });
+
+  it("executes open_application successfully when consent prompt approves (Allow once)", async () => {
+    // Simulates user choosing "Allow once"
+    const broker = new CapabilityBroker(() => true);
+    const capabilityManager = createCapabilityManager({
+      broker,
+      platformDetector: () => "windows",
+    });
+    const adapter = await createWindowsAdapter();
+    capabilityManager.registerAdapter(adapter);
+    for (const descriptor of WINDOWS_CAPABILITY_DESCRIPTORS) {
+      capabilityManager.registerCapability(descriptor);
+    }
+    const registry = new ToolRegistry(broker);
+    for (const tool of buildDesktopToolDefinitions(capabilityManager)) {
+      registry.register(tool);
+    }
+
+    const result = await registry.invoke(
+      { id: "call-open-2", name: "open_application", arguments: { app: "notepad" } },
+      { sessionId: "s1" },
+      "ai-orchestrator",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.content).toBe("Opening notepad.");
+    expect(
+      broker.getAuditLog().some((e) => e.capability === "automation.execute" && e.result === "granted"),
     ).toBe(true);
   });
 });

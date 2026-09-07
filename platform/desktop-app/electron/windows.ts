@@ -34,9 +34,18 @@ function configureMediaPermissions(): void {
   mediaPermissionsConfigured = true;
   const ses = session.defaultSession;
   ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === "media");
+    callback(
+      permission === "media" ||
+        permission === "clipboard-sanitized-write" ||
+        permission === "clipboard-read",
+    );
   });
-  ses.setPermissionCheckHandler((_webContents, permission) => permission === "media");
+  ses.setPermissionCheckHandler(
+    (_webContents, permission) =>
+      permission === "media" ||
+      permission === "clipboard-sanitized-write" ||
+      permission === "clipboard-read",
+  );
 }
 
 export function configureWindowSecurity(win: BrowserWindow): void {
