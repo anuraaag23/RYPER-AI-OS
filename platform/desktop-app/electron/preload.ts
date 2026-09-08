@@ -58,6 +58,8 @@ const invokeApi: RyperInvokeApi = {
   },
   listPermissions: () => ipcRenderer.invoke(IPC_CHANNELS.listPermissions),
   resetPermissions: () => ipcRenderer.invoke(IPC_CHANNELS.resetPermissions),
+  setPermissionPolicy: (capability, policy) =>
+    ipcRenderer.invoke(IPC_CHANNELS.setPermissionPolicy, capability, policy),
   getAIStatus: () => ipcRenderer.invoke(IPC_CHANNELS.getAIStatus),
   restartLocalAI: () => ipcRenderer.invoke(IPC_CHANNELS.restartLocalAI),
   openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.openLogsFolder),

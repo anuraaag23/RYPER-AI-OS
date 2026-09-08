@@ -30,6 +30,7 @@ export interface ConfirmationBridge {
     message: string,
     approveLabel?: string,
     denyLabel?: string,
+    capability?: string,
   ): Promise<boolean>;
 }
 
@@ -61,6 +62,7 @@ export function createConfirmationBridge(
     message: string,
     approveLabel?: string,
     denyLabel?: string,
+    capability?: string,
   ): Promise<boolean> {
     const webContents = getRendererWebContents();
     if (!webContents || webContents.isDestroyed()) {
@@ -90,6 +92,7 @@ export function createConfirmationBridge(
         message,
         ...(approveLabel ? { approveLabel } : {}),
         ...(denyLabel ? { denyLabel } : {}),
+        ...(capability ? { capability } : {}),
       };
       webContents.send(IPC_CHANNELS.confirmationRequested, payload);
     });

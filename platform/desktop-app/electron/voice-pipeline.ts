@@ -154,14 +154,19 @@ export class VoicePipeline {
     const startedAt = Date.now();
     diagnostics.startSession();
 
-    // Same real fix as `@ryper/voice-engine`'s `AudioPipelineManager`
-    // (see docs/adr/0030): a previous turn's terminal "error"/"cancelled"
-    // state must be reset to "idle" before this turn can start —
-    // `transition("listening")` below is only valid from "idle", so
-    // without this, every turn after the first failure would throw and
-    // permanently break the pipeline.
-    if (session.state === "error" || session.state === "cancelled") {
-      sessionManager.transition("idle");
+    // Reset any non-idle state before this turn starts so transition("listening")
+    // is always from "idle" and never throws InvalidVoiceSessionTransitionError.
+    if (session.state !== "idle") {
+      try {
+        if (session.state === "error" || session.state === "cancelled" || session.state === "interrupted") {
+          sessionManager.transition("idle");
+        } else {
+          sessionManager.transition("cancelled");
+          sessionManager.transition("idle");
+        }
+      } catch {
+        // Safe fallback if session state was already transitioning
+      }
     }
 
     try {
@@ -383,6 +388,10 @@ export class VoicePipeline {
             this.markCaptureEnded();
             return;
           }
+        } else if (frameCount >= 50) {
+          // Initial silence timeout: no speech detected after ~12s
+          log.info("[DIAGNOSTIC] VAD initial silence timeout reached", { frameCount });
+          return;
         }
       }
     } finally {
@@ -607,10 +616,14 @@ export class VoicePipeline {
   private resolveVoiceId(text: string): string {
     const dynamic = this.options.getVoiceSettings?.();
     const ttsVoice = dynamic?.ttsVoice ?? "auto";
-    if (ttsVoice === "hi") return "hindi";
-    if (ttsVoice === "en") return "default";
-    // "auto": auto-select Hindi voice if text contains Devanagari script
-    if (/[\u0900-\u097F]/.test(text)) {
+    if (ttsVoice === "hi" || ttsVoice === "hindi") return "hindi";
+    if (ttsVoice === "en-IN") return "en-IN";
+    if (ttsVoice === "en" || ttsVoice === "default") return "default";
+    // "auto": auto-select Hindi voice if text contains Devanagari script or common Hinglish words
+    if (
+      /[\u0900-\u097F]/.test(text) ||
+      /\b(?:hai|hain|karo|kholo|khol|diya|chalao|roko|gaana|aawaz|badhao|namaste|dhanyawad|shukriya|aap|kaise|kya|bhai|theek|accha|shuru|band)\b/i.test(text)
+    ) {
       return "hindi";
     }
     return this.options.settings.get().voiceId ?? "default";

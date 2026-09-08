@@ -43,6 +43,23 @@ export const DESKTOP_INTENT_PATTERNS: readonly IntentPattern[] = [
     pattern: /^show me (?:this|that)(?:\s+\w+)?$/i,
   },
   {
+    intent: "open_this",
+    pattern: /^(?:(?:open|do|play|run|show)(?: (?:it|this|that))? )?again$/i,
+  },
+  {
+    intent: "open_this",
+    pattern: /^(?:fir se|phir se|dobara)(?: (?:kholo|chalao|karo|dikhao))?$/i,
+  },
+  {
+    intent: "open_this",
+    pattern: /^(?:kholo|chalao|dikhao) (?:fir se|phir se|dobara)$/i,
+  },
+  {
+    intent: "open_folder",
+    pattern: /^(?:open|show me)(?: (?:the|my))? (?<path>downloads|desktop|documents|pictures|videos|music)(?: folder)?$/i,
+    slotNames: ["path"],
+  },
+  {
     intent: "open_folder",
     pattern: /^show me (?:the |my )?(?!this\b|that\b)(?<path>.+?)\s+folder$/i,
     slotNames: ["path"],

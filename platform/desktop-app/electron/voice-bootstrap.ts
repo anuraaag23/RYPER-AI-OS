@@ -172,7 +172,7 @@ export async function bootstrapVoice(
   deviceManagerHolder.current = deviceManager;
   const microphoneManager = new MicrophoneManager(deviceManager, audioBridge);
   const speakerManager = new SpeakerManager(deviceManager, audioBridge);
-  const vad = new EnergyVoiceActivityDetector();
+  const vad = new EnergyVoiceActivityDetector({ energyThreshold: 200 });
 
   const modelRegistry = new ModelRegistry();
   const modelSelector = new ModelSelector(modelRegistry);
@@ -223,6 +223,7 @@ export async function bootstrapVoice(
   ttsRegistry.register(
     new LocalSpeechSynthesisProvider(runtimeManager, inferenceContext, [
       { id: "default", name: "Ryper", language: "en-US" },
+      { id: "en-IN", name: "Ryper (India)", language: "en-IN" },
       { id: "hindi", name: "Ryper Hindi", language: "hi-IN" },
     ]),
   );

@@ -159,7 +159,11 @@ export class AIOrchestrator {
 
       messages = [
         ...messages,
-        ...(roundText.length > 0 ? [{ role: "assistant" as const, content: roundText }] : []),
+        {
+          role: "assistant" as const,
+          content: roundText,
+          toolCalls: pendingToolCalls,
+        },
       ];
 
       for (const toolCall of pendingToolCalls) {

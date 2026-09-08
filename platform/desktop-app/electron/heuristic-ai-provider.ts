@@ -118,10 +118,25 @@ export class HeuristicToolCallingProvider implements AIProvider {
     // Summarize using the real tool results already collected this turn, honestly, without
     // fabricating anything beyond what those results actually said.
     const toolResults = request.messages.filter((m) => m.role === "tool");
-    const summary =
-      toolResults.length > 0
-        ? `Done. ${toolResults.map((m) => m.content).join(" ")}`
-        : `I don't have a pattern-matched way to handle "${lastUser.content}" yet — this fallback isn't a language model, so it can only act on requests matching a known command pattern.`;
+    let summary: string;
+    if (toolResults.length > 0) {
+      summary = `Done. ${toolResults.map((m) => m.content).join(" ")}`;
+    } else {
+      const lower = lastUser.content.toLowerCase().trim();
+      if (/^(hi|hello|hey|namaste|greetings)\b/i.test(lower)) {
+        summary = "Hello! I am RYPER AI OS. How can I help you with your system or apps today?";
+      } else if (/\b(who are you|what are you)\b/i.test(lower)) {
+        summary = "I am RYPER AI OS, your local voice-enabled AI operating system assistant.";
+      } else if (/\b(how are you)\b/i.test(lower)) {
+        summary = "I'm doing well, ready to assist you! What would you like me to do?";
+      } else if (/\b(thank you|thanks|dhanyawad|shukriya)\b/i.test(lower)) {
+        summary = "You're welcome! Let me know if you need anything else.";
+      } else if (/\b(what can you do|help|capabilities)\b/i.test(lower)) {
+        summary = "I can open apps and folders, adjust volume and brightness, control media playback, search the web, manage system settings, and converse in English and Hindi.";
+      } else {
+        summary = `I don't have a pattern-matched way to handle "${lastUser.content}" yet — this fallback isn't a language model, so it can only act on requests matching a known command pattern. Try asking to open an app, open a folder like Downloads, adjust volume, or search.`;
+      }
+    }
 
     for (const chunk of summary.split(" ")) {
       yield { type: "text_delta", delta: `${chunk} ` };

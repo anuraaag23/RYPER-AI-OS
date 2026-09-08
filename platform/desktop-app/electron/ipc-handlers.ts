@@ -2,6 +2,7 @@ import { app, shell, ipcMain, BrowserWindow, type WebContents } from "electron";
 import { createLogger } from "@ryper/logging";
 import type { RyperCore } from "./core-bootstrap.js";
 import { runTextTurn } from "./text-chat.js";
+import type { Capability } from "@ryper/security";
 import {
   IPC_CHANNELS,
   type AIStatusPayload,
@@ -9,6 +10,7 @@ import {
   type AudioAvailability,
   type AudioDeviceKindPayload,
   type AudioStatusPayload,
+  type PermissionPolicy,
   type SendMessageRequest,
   type SendMessageResponse,
   type TurnProgressPayload,
@@ -59,6 +61,7 @@ export const ALLOWED_SETTING_KEYS = new Set([
   "voiceLanguage",
   "ttsVoice",
   "hasCompletedOnboarding",
+  "persistentPermissions",
 ]);
 
 export function sanitizeSettingsPatch(patch: unknown): Partial<AppSettings> {
@@ -477,22 +480,46 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   );
 
   ipcMain.handle(IPC_CHANNELS.listPermissions, () => {
-    return KNOWN_PERMISSION_CATEGORIES.map((item) => ({
-      id: item.capability,
-      category: item.category,
-      description: item.description,
-      granted: core.broker.hasGrant("ai-orchestrator", item.capability),
-      isSessionOnly: item.capability !== "system.power",
-    }));
+    return KNOWN_PERMISSION_CATEGORIES.map((item) => {
+      const policy = core.broker.getPolicy(item.capability, "ai-orchestrator");
+      return {
+        id: item.capability,
+        category: item.category,
+        description: item.description,
+        granted: core.broker.hasGrant("ai-orchestrator", item.capability),
+        isSessionOnly: item.capability !== "system.power" && policy === "prompt",
+        policy,
+      };
+    });
   });
 
-  ipcMain.handle(IPC_CHANNELS.resetPermissions, () => {
+  ipcMain.handle(
+    IPC_CHANNELS.setPermissionPolicy,
+    async (_event: Electron.IpcMainInvokeEvent, capability: unknown, policy: unknown) => {
+      const cap = assertString(capability, "capability", 128) as Capability;
+      if (policy !== "always" && policy !== "prompt" && policy !== "denied") {
+        throw new TypeError(`invalid permission policy: ${String(policy)}`);
+      }
+      core.broker.setPolicy(cap, policy as PermissionPolicy, "ai-orchestrator");
+      const currentSettings = await core.settings.load();
+      const updatedPolicies = {
+        ...(currentSettings.persistentPermissions ?? {}),
+        [cap]: policy as PermissionPolicy,
+      };
+      await core.settings.update({ persistentPermissions: updatedPolicies });
+      log.info("permission policy set and persisted", { capability: cap, policy });
+    },
+  );
+
+  ipcMain.handle(IPC_CHANNELS.resetPermissions, async () => {
     for (const item of KNOWN_PERMISSION_CATEGORIES) {
       if (item.capability !== "notifications") {
         core.broker.revoke("ai-orchestrator", item.capability);
+        core.broker.setPolicy(item.capability, "prompt", "ai-orchestrator");
       }
     }
-    log.info("session permissions reset");
+    await core.settings.update({ persistentPermissions: {} });
+    log.info("session and persistent permissions reset");
   });
 
   ipcMain.handle(IPC_CHANNELS.restartLocalAI, async (): Promise<{ ok: boolean; message: string }> => {

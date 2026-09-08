@@ -595,7 +595,31 @@ export const desktopActions = {
     // (?<app>.+)` — it swallows a trailing "in Chrome"-style browser
     // suffix along with everything else, so that's peeled off first
     // regardless of which real target this ends up being.
-    const { target, browserId: explicitBrowserId } = splitTargetAndBrowser(spokenApp);
+    const { target: rawTarget, browserId: explicitBrowserId } = splitTargetAndBrowser(spokenApp);
+
+    let target = rawTarget.trim();
+    // Conversational repair (Bug 5): handle corrections like "Downloads, not Documents" or "no, open Downloads" or "I said open Downloads"
+    const notMatch = /^(?<intended>.+?)(?:,\s*|\s+)not\s+.+$/i.exec(target);
+    if (notMatch && notMatch.groups?.intended) {
+      target = notMatch.groups.intended.trim();
+    }
+    const correctionPrefixMatch = /^(?:no,?\s+)?(?:i\s+said\s+)?(?:open\s+)?(?<intended>.+)$/i.exec(target);
+    if (correctionPrefixMatch && correctionPrefixMatch.groups?.intended && correctionPrefixMatch.groups.intended.toLowerCase() !== rawTarget.toLowerCase()) {
+      target = correctionPrefixMatch.groups.intended.trim();
+    }
+
+    // Conversational follow-up (Bug 10): "again" / "open again" / "play again" / "fir se" / "phir se" / "dobara"
+    if (/^(?:again|it again|that again|this again|fir se|phir se|dobara)$/i.test(target)) {
+      if (!contextTracker) {
+        return { ok: false, message: "I don't have a file, folder, or link to open right now." };
+      }
+      return this.openContextualReference(
+        capabilityManager,
+        actorId,
+        contextTracker,
+        preferredBrowser,
+      );
+    }
 
     // "Open this"/"open this folder"/"open that PDF" (PART 9-11) — a
     // bare demonstrative, optionally followed by one descriptive word,
@@ -603,7 +627,7 @@ export const desktopActions = {
     // anything below tries to treat "this"/"that" as a literal
     // app/browser/website/file name (which would either fail
     // confusingly or, worse, resolve to the wrong thing).
-    if (/^(?:this|that)(?:\s+\w+)?$/i.test(target.trim())) {
+    if (/^(?:this|that)(?:\s+\w+)?$/i.test(target)) {
       if (!contextTracker) {
         return { ok: false, message: "I don't have a file, folder, or link to open right now." };
       }
@@ -667,7 +691,7 @@ export const desktopActions = {
     //    verified against the real filesystem, never guessed) — this
     //    is what makes "Open my Downloads folder" and
     //    "Open C:\...\file.pdf" work through this same handler.
-    const normalizedTarget = target.trim().toLowerCase();
+    const normalizedTarget = target.toLowerCase();
     const websiteDomain = KNOWN_WEBSITE_ALIASES[normalizedTarget];
     if (websiteDomain) {
       return this.openUrl(
@@ -1556,7 +1580,21 @@ export const desktopActions = {
     contextTracker?: ContextReferenceTracker,
   ): Promise<DesktopActionResult> {
     if (!path) return { ok: false, message: "Which folder should I open?" };
-    const resolvedPath = stripWrappingQuotes(path);
+    let resolvedPath = stripWrappingQuotes(path);
+    const normalized = resolvedPath.trim().toLowerCase().replace(/^(my|the)\s+/, "").replace(/\s+folder$/, "");
+    if (["downloads", "desktop", "documents", "pictures", "videos", "music"].includes(normalized)) {
+      try {
+        const resolved = (await capabilityManager.invoke(
+          "filesystem",
+          "well_known_folder",
+          { folder: normalized },
+          ctx(actorId),
+        )) as string;
+        if (resolved) resolvedPath = resolved;
+      } catch {
+        // keep original path
+      }
+    }
     const result = await invoke(
       capabilityManager,
       "application_control",

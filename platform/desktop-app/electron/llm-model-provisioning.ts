@@ -145,6 +145,10 @@ export class LlamaServerManager {
       // how the prompt template is rendered internally, not the
       // OpenAI-compatible wire format this repo's `OpenAICompatibleProvider`
       // already speaks.
+      // GPU offload layers (default 99 offloads all layers if GPU is available, fallback to CPU)
+      "-ngl",
+      process.env["RYPER_LLAMA_GPU_LAYERS"] ?? "99",
+      "--flash-attn",
       "--jinja",
     ]);
     this.baseUrl = `http://127.0.0.1:${paths.port}/v1`;

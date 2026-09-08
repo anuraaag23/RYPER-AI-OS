@@ -692,7 +692,16 @@ export class PowerShellWindowsSystemApi implements WindowsSystemApi {
     // the unambiguous, literal "show this folder" operation and doesn't
     // depend on PowerShell's own item-provider behavior for a path that
     // might be a reparse point/junction.
-    await run(this.exec, `Start-Process -FilePath explorer.exe -ArgumentList ${psQuote(path)}`);
+    let resolved = path;
+    const lower = path.trim().toLowerCase().replace(/^(my|the)\s+/, "").replace(/\s+folder$/, "");
+    if (["downloads", "desktop", "documents", "pictures", "videos", "music"].includes(lower)) {
+      try {
+        resolved = await this.getWellKnownFolderPath(lower as WellKnownFolder);
+      } catch {
+        // fallback to original path
+      }
+    }
+    await run(this.exec, `Start-Process -FilePath explorer.exe -ArgumentList ${psQuote(resolved)}`);
   }
 
   async listDirectory(path: string, filter?: string): Promise<readonly FileEntry[]> {

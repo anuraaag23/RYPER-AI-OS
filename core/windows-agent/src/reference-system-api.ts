@@ -476,10 +476,19 @@ export class InMemoryWindowsSystemApi implements WindowsSystemApi {
   }
 
   async openFolder(path: string): Promise<void> {
-    if (!this.directories.has(path)) {
+    let target = path;
+    const lower = path.trim().toLowerCase().replace(/^(my|the)\s+/, "").replace(/\s+folder$/, "");
+    if (["downloads", "desktop", "documents", "pictures", "videos", "music"].includes(lower)) {
+      try {
+        target = await this.getWellKnownFolderPath(lower as WellKnownFolder);
+      } catch {
+        // fallback
+      }
+    }
+    if (!this.directories.has(target)) {
       throw new WindowsSystemApiError(`no directory at "${path}"`);
     }
-    await this.startProcess("C:\\Windows\\explorer.exe", [path]);
+    await this.startProcess("C:\\Windows\\explorer.exe", [target]);
   }
 
   // -- Filesystem --

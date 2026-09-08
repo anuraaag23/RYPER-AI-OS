@@ -173,7 +173,13 @@ export async function bootstrapCore(
   let settings!: SettingsStore;
   await report("settings", async () => {
     settings = new SettingsStore(paths.settingsFile);
-    await settings.load();
+    const loaded = await settings.load();
+    if (loaded.persistentPermissions) {
+      broker.importPolicies(loaded.persistentPermissions);
+      log.info("restored persistent permission policies from settings", {
+        count: Object.keys(loaded.persistentPermissions).length,
+      });
+    }
   });
 
   if (!process.env["VITEST"]) {

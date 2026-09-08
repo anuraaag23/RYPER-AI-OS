@@ -351,11 +351,12 @@ export function SettingsApp(): JSX.Element {
             <select
               id="tts-voice"
               value={settings.ttsVoice ?? "auto"}
-              onChange={(e) => update({ ttsVoice: e.target.value as "auto" | "en" | "hi" })}
+              onChange={(e) => update({ ttsVoice: e.target.value as "auto" | "en" | "en-IN" | "hi" })}
             >
               <option value="auto">Auto (match response language)</option>
               <option value="en">English (US)</option>
-              <option value="hi">Hindi / Indian accent (हिन्दी)</option>
+              <option value="en-IN">English (India / Indian Accent)</option>
+              <option value="hi">Hindi (हिन्दी)</option>
             </select>
             <span className="settings-field-hint">
               Speaks replies in your preferred accent or matches your query.
@@ -472,17 +473,35 @@ export function SettingsApp(): JSX.Element {
                 <span className="permission-name">{p.category}</span>
                 <span className="permission-desc">{p.description}</span>
               </div>
-              <span
-                className={`permission-status ${
-                  p.granted ? "permission-status--granted" : "permission-status--prompt"
-                }`}
-              >
-                {p.granted
-                  ? p.isSessionOnly
-                    ? "Allowed this session"
-                    : "Always allowed"
-                  : "Ask each time"}
-              </span>
+              <div className="permission-control-group">
+                <span
+                  className={`permission-status ${
+                    p.granted ? "permission-status--granted" : "permission-status--prompt"
+                  }`}
+                >
+                  {p.granted
+                    ? p.isSessionOnly
+                      ? "Allowed this session"
+                      : "Always allowed"
+                    : p.policy === "denied"
+                    ? "Blocked"
+                    : "Ask each time"}
+                </span>
+                <select
+                  className="permission-policy-select"
+                  aria-label={`Permission policy for ${p.category}`}
+                  value={p.policy ?? (p.granted ? (p.isSessionOnly ? "prompt" : "always") : "prompt")}
+                  onChange={async (e) => {
+                    const nextPolicy = e.target.value as "always" | "prompt" | "denied";
+                    await window.ryper.setPermissionPolicy(p.id, nextPolicy);
+                    await refreshPermissions();
+                  }}
+                >
+                  <option value="always">Always allow</option>
+                  <option value="prompt">Ask each time</option>
+                  <option value="denied">Block</option>
+                </select>
+              </div>
             </div>
           ))}
         </div>
@@ -492,7 +511,7 @@ export function SettingsApp(): JSX.Element {
             className="settings-button btn-reset-permissions"
             onClick={() => void resetPermissions()}
           >
-            Reset Session Permissions
+            Reset All Permissions
           </button>
         </div>
       </section>

@@ -96,6 +96,24 @@ export function ConfirmationDialog(): JSX.Element | null {
           >
             {pending.approveLabel ?? "Approve"}
           </button>
+          {pending.capability && (
+            <button
+              type="button"
+              className="confirmation-approve confirmation-always"
+              onClick={async () => {
+                try {
+                  if (pending.capability) {
+                    await window.ryper.setPermissionPolicy(pending.capability, "always");
+                  }
+                } catch {
+                  // policy save fallback
+                }
+                respond(true);
+              }}
+            >
+              Always Allow
+            </button>
+          )}
         </div>
       </div>
     </div>

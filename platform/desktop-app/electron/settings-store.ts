@@ -26,13 +26,22 @@ function isVoiceLanguagePreference(
 }
 
 function isTtsVoicePreference(value: unknown): value is NonNullable<AppSettings["ttsVoice"]> {
-  return value === "auto" || value === "en" || value === "hi";
+  return value === "auto" || value === "en" || value === "en-IN" || value === "hi";
 }
 
 /** Validates untrusted JSON read from disk field-by-field rather than trusting a blind cast. */
 function sanitizeSettings(candidate: unknown): AppSettings {
   if (typeof candidate !== "object" || candidate === null) return DEFAULT_SETTINGS;
   const raw = candidate as Record<string, unknown>;
+  const sanitizedPolicies: Record<string, "always" | "prompt" | "denied"> = {};
+  if (typeof raw.persistentPermissions === "object" && raw.persistentPermissions !== null) {
+    for (const [key, policy] of Object.entries(raw.persistentPermissions as Record<string, unknown>)) {
+      if (policy === "always" || policy === "prompt" || policy === "denied") {
+        sanitizedPolicies[key] = policy;
+      }
+    }
+  }
+
   return {
     theme: isThemePreference(raw.theme) ? raw.theme : DEFAULT_SETTINGS.theme,
     voiceEnabled:
@@ -59,6 +68,9 @@ function sanitizeSettings(candidate: unknown): AppSettings {
       : {}),
     ...(typeof raw.hasCompletedOnboarding === "boolean"
       ? { hasCompletedOnboarding: raw.hasCompletedOnboarding }
+      : {}),
+    ...(Object.keys(sanitizedPolicies).length > 0
+      ? { persistentPermissions: sanitizedPolicies }
       : {}),
   };
 }

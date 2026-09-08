@@ -77,6 +77,8 @@ export interface AuditEntry {
 /** Caller supplies the actual UI prompt / policy check; the broker only enforces the outcome. */
 export type ConsentPrompt = (request: CapabilityRequest) => Promise<boolean> | boolean;
 
+export type PermissionPolicy = "always" | "prompt" | "denied";
+
 /**
  * Every OS capability access in RYPER — filesystem, mic, camera, network,
  * automation actions — is mediated here. Modules and plugins never call the
@@ -86,6 +88,7 @@ export type ConsentPrompt = (request: CapabilityRequest) => Promise<boolean> | b
  */
 export class CapabilityBroker {
   private readonly grants = new Map<string, GrantDecision>();
+  private readonly policies = new Map<string, PermissionPolicy>();
   private readonly auditLog: AuditEntry[] = [];
   private readonly promptForConsent: ConsentPrompt;
 
@@ -97,8 +100,62 @@ export class CapabilityBroker {
     return `${actorId}::${capability}`;
   }
 
+  setPolicy(capability: Capability, policy: PermissionPolicy, actorId?: string): void {
+    const k = actorId ? this.key(actorId, capability) : capability;
+    this.policies.set(k, policy);
+    if (policy === "always") {
+      if (actorId) {
+        this.grant(actorId, capability);
+      }
+    } else if (policy === "denied") {
+      if (actorId) {
+        this.grants.set(this.key(actorId, capability), "denied");
+      }
+    } else if (policy === "prompt") {
+      if (actorId) {
+        this.grants.delete(this.key(actorId, capability));
+      }
+    }
+  }
+
+  getPolicy(capability: Capability, actorId?: string): PermissionPolicy {
+    if (actorId) {
+      const specific = this.policies.get(this.key(actorId, capability));
+      if (specific) return specific;
+    }
+    return this.policies.get(capability) ?? "prompt";
+  }
+
+  exportPolicies(): Record<string, PermissionPolicy> {
+    const out: Record<string, PermissionPolicy> = {};
+    for (const [k, v] of this.policies.entries()) {
+      out[k] = v;
+    }
+    return out;
+  }
+
+  importPolicies(policies: Record<string, PermissionPolicy>): void {
+    for (const [k, v] of Object.entries(policies)) {
+      this.policies.set(k, v);
+      if (v === "always" && k.includes("::")) {
+        const [actor, cap] = k.split("::");
+        if (actor && cap) {
+          this.grant(actor, cap as Capability);
+        }
+      }
+    }
+  }
+
   async requestCapability(request: CapabilityRequest): Promise<CapabilityGrant> {
-    const approved = await this.promptForConsent(request);
+    const policy = this.getPolicy(request.capability, request.actorId);
+    let approved: boolean;
+    if (policy === "always") {
+      approved = true;
+    } else if (policy === "denied") {
+      approved = false;
+    } else {
+      approved = await this.promptForConsent(request);
+    }
     const decision: GrantDecision = approved ? "granted" : "denied";
     this.grants.set(this.key(request.actorId, request.capability), decision);
 
@@ -106,6 +163,7 @@ export class CapabilityBroker {
     log.info("capability decision", {
       actor: request.actorId,
       capability: request.capability,
+      policy,
       decision,
     });
 
@@ -118,7 +176,15 @@ export class CapabilityBroker {
   }
 
   hasGrant(actorId: string, capability: Capability): boolean {
-    return this.grants.get(this.key(actorId, capability)) === "granted";
+    const decision = this.grants.get(this.key(actorId, capability));
+    if (decision === "granted") return true;
+    if (decision === "denied") return false;
+    const policy = this.getPolicy(capability, actorId);
+    if (policy === "always") {
+      this.grant(actorId, capability);
+      return true;
+    }
+    return false;
   }
 
   revoke(actorId: string, capability: Capability): void {

@@ -267,9 +267,12 @@ export class WindowsAdapter implements PlatformAdapter {
     add("application_control", "open_file", async (p) =>
       this.applicationManager.openFile(str(p, "path")),
     );
-    add("application_control", "open_folder", async (p) =>
-      this.systemApi.openFolder(str(p, "path")),
-    );
+    add("application_control", "open_folder", async (p) => {
+      const rawPath = str(p, "path");
+      const known = await this.pathResolver.resolveKnownFolder(rawPath);
+      const resolved = known ?? (await this.pathResolver.resolvePath(rawPath));
+      return this.systemApi.openFolder(resolved);
+    });
     add("application_control", "list_browsers", async () => this.applicationManager.listBrowsers());
     add("application_control", "launch_browser", async (p) =>
       this.applicationManager.launchBrowser(str(p, "browserId")),

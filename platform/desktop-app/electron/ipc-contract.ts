@@ -76,7 +76,8 @@ export interface VoiceStatePayload {
 
 export type ThemePreference = "light" | "dark" | "system";
 export type VoiceLanguagePreference = "auto" | "en" | "hi";
-export type TtsVoicePreference = "auto" | "en" | "hi";
+export type TtsVoicePreference = "auto" | "en" | "en-IN" | "hi";
+export type PermissionPolicy = "always" | "prompt" | "denied";
 
 export interface AppSettings {
   readonly theme: ThemePreference;
@@ -90,7 +91,7 @@ export interface AppSettings {
   readonly voiceLanguage?: VoiceLanguagePreference | undefined;
   /**
    * The user's preferred voice model/accent for text-to-speech output:
-   * "auto" (match response language), "en" (English), "hi" (Hindi).
+   * "auto" (match response language), "en" (English), "en-IN" (Indian English), "hi" (Hindi).
    */
   readonly ttsVoice?: TtsVoicePreference | undefined;
   /**
@@ -106,6 +107,8 @@ export interface AppSettings {
   readonly preferredBrowserId?: string;
   /** True if the user has completed or dismissed the initial first-run onboarding. */
   readonly hasCompletedOnboarding?: boolean;
+  /** Persistent capability authorization policies across sessions. */
+  readonly persistentPermissions?: Readonly<Record<string, PermissionPolicy>> | undefined;
 }
 
 export interface HealthCheckSummary {
@@ -147,6 +150,7 @@ export interface ConfirmationRequestPayload {
   readonly message: string;
   readonly approveLabel?: string;
   readonly denyLabel?: string;
+  readonly capability?: string;
 }
 
 export interface PermissionEntryPayload {
@@ -155,6 +159,7 @@ export interface PermissionEntryPayload {
   readonly description: string;
   readonly granted: boolean;
   readonly isSessionOnly: boolean;
+  readonly policy?: PermissionPolicy;
 }
 
 // ---- Phase 13.6: real audio devices ----
@@ -232,6 +237,7 @@ export interface RyperInvokeApi {
   getCurrentReference(): Promise<CurrentReferencePayload | undefined>;
   listPermissions(): Promise<readonly PermissionEntryPayload[]>;
   resetPermissions(): Promise<void>;
+  setPermissionPolicy(capability: string, policy: PermissionPolicy): Promise<void>;
   getAIStatus(): Promise<AIStatusPayload>;
   restartLocalAI(): Promise<{ readonly ok: boolean; readonly message: string }>;
   openLogsFolder(): Promise<void>;
@@ -316,6 +322,7 @@ export const IPC_CHANNELS = {
   getCurrentReference: "context:current-reference",
   listPermissions: "permissions:list",
   resetPermissions: "permissions:reset",
+  setPermissionPolicy: "permissions:set-policy",
   getAIStatus: "ai:status",
   turnProgress: "turn:progress",
   restartLocalAI: "ai:restart",

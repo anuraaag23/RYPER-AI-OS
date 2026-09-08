@@ -14,6 +14,8 @@ export interface ChatMessage {
   readonly toolCallId?: string;
   /** Present when role === "tool": the tool's name, for providers that require it. */
   readonly name?: string;
+  /** Present when role === "assistant" and model requested tool calls. */
+  readonly toolCalls?: readonly ToolCallRequest[];
 }
 
 export interface ToolParameterPropertySchema {

@@ -89,8 +89,17 @@ export async function startMicrophoneCapture(
   try {
     stream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (err) {
-    callbacks.onError(describeGetUserMediaError(err));
-    return { stop(): void {}, getAppliedAudioSettings: () => undefined };
+    if (deviceId && deviceId !== "default") {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (fallbackErr) {
+        callbacks.onError(describeGetUserMediaError(fallbackErr));
+        return { stop(): void {}, getAppliedAudioSettings: () => undefined };
+      }
+    } else {
+      callbacks.onError(describeGetUserMediaError(err));
+      return { stop(): void {}, getAppliedAudioSettings: () => undefined };
+    }
   }
 
   const AudioContextCtor =

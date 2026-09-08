@@ -32,6 +32,17 @@ export function App(): JSX.Element {
     });
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.code === "Space" || e.key === " ")) {
+        e.preventDefault();
+        void window.ryper.startVoiceTurn();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleDismissOnboarding = (): void => {
     setShowOnboarding(false);
     try {

@@ -78,6 +78,18 @@ export function createOpenAICompatibleProvider(
             content: m.content,
             ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
             ...(m.name ? { name: m.name } : {}),
+            ...(m.toolCalls && m.toolCalls.length > 0
+              ? {
+                  tool_calls: m.toolCalls.map((tc) => ({
+                    id: tc.id,
+                    type: "function",
+                    function: {
+                      name: tc.name,
+                      arguments: JSON.stringify(tc.arguments ?? {}),
+                    },
+                  })),
+                }
+              : {}),
           })),
           ...(request.tools
             ? {

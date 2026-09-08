@@ -29,23 +29,40 @@ let mediaPermissionsConfigured = false;
  * `main.ts`'s `denyAllConfirmer` for the equivalent capability-broker
  * policy, `docs/adr/0017`).
  */
-function configureMediaPermissions(): void {
-  if (mediaPermissionsConfigured) return;
-  mediaPermissionsConfigured = true;
-  const ses = session.defaultSession;
-  ses.setPermissionRequestHandler((_webContents, permission, callback) => {
+export function configureMediaPermissions(targetSession?: any): void {
+  if (mediaPermissionsConfigured && !targetSession) return;
+  if (!targetSession) mediaPermissionsConfigured = true;
+  const ses = targetSession?.defaultSession ?? targetSession ?? session.defaultSession;
+  ses.setPermissionRequestHandler((_webContents: any, permission: any, callback: any, details: any) => {
+    const permStr = permission as string;
+    const isAudioMedia =
+      permStr === "media" &&
+      Array.isArray((details as { mediaTypes?: string[] })?.mediaTypes) &&
+      (details as { mediaTypes?: string[] }).mediaTypes?.includes("audio");
     callback(
-      permission === "media" ||
-        permission === "clipboard-sanitized-write" ||
-        permission === "clipboard-read",
+      permStr === "media" ||
+        permStr === "microphone" ||
+        permStr === "audio-capture" ||
+        isAudioMedia ||
+        permStr === "clipboard-sanitized-write" ||
+        permStr === "clipboard-read",
     );
   });
-  ses.setPermissionCheckHandler(
-    (_webContents, permission) =>
-      permission === "media" ||
-      permission === "clipboard-sanitized-write" ||
-      permission === "clipboard-read",
-  );
+  ses.setPermissionCheckHandler((_webContents: any, permission: any, _origin: any, details: any) => {
+    const permStr = permission as string;
+    const isAudioMedia =
+      permStr === "media" &&
+      Array.isArray((details as { mediaTypes?: string[] })?.mediaTypes) &&
+      (details as { mediaTypes?: string[] }).mediaTypes?.includes("audio");
+    return (
+      permStr === "media" ||
+      permStr === "microphone" ||
+      permStr === "audio-capture" ||
+      isAudioMedia ||
+      permStr === "clipboard-sanitized-write" ||
+      permStr === "clipboard-read"
+    );
+  });
 }
 
 export function configureWindowSecurity(win: BrowserWindow): void {

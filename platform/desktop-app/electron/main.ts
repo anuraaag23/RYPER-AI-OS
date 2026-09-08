@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, globalShortcut } from "electron";
 app.setName("RYPER AI OS");
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 if (process.env["RYPER_TEST_PROFILE"]) {
@@ -31,13 +31,17 @@ function broadcastDiagnostics(event: StartupDiagnostics): void {
 }
 
 async function initialize(): Promise<void> {
+  // Create mainWindow early so webContents is immediately available for audio bridge,
+  // confirmations, and startup diagnostics
+  mainWindow = createMainWindow();
+  mainWindow.webContents.on("console-message", (_event, level, message) => {
+    log.info(`[RENDERER console:${level}] ${message}`);
+  });
+  mainWindow.webContents.once("did-finish-load", () => {
+    void broadcastAudioStatus();
+  });
 
-  // Real, UI-backed confirmation dialog (docs/adr/0032) â€” closes the
-  // "no confirmation UI yet" gap named repeatedly across
-  // docs/adr/0021, 0030, and 0031. `getRendererWebContents` is re-read
-  // on every call (not captured once) so this keeps working correctly
-  // across window recreation, same pattern as the existing audio
-  // bridge just below.
+  // Real, UI-backed confirmation dialog (docs/adr/0032)
   const confirmationBridge = createConfirmationBridge(ipcMain, () => mainWindow?.webContents);
 
   core = await bootstrapCore(
@@ -47,10 +51,6 @@ async function initialize(): Promise<void> {
       modelCacheDir: join(app.getPath("userData"), "models"),
     },
     broadcastDiagnostics,
-    // Real consent prompt: shows an actual dialog in the renderer and
-    // waits for the person's real decision (denies on timeout or if no
-    // renderer is available — never silently grants). Consumer-friendly
-    // presentation mapping strips internal capability/actor IDs (P0-1).
     async (request) => {
       const presentation = describeCapabilityRequest(request);
       return confirmationBridge.prompt(
@@ -58,19 +58,13 @@ async function initialize(): Promise<void> {
         presentation.message,
         presentation.approveLabel,
         presentation.denyLabel,
+        request.capability,
       );
     },
-    // Phase 13.6: the real audio bridge talks to the main window's renderer over IPC
-    // (see docs/adr/0017) — `ipcMain` is the real singleton, `mainWindow` already
-    // exists at this point (created just above), so this always resolves to a real,
-    // live `WebContents` for the life of the app.
     {
       ipcMain,
       getRendererWebContents: () => mainWindow?.webContents,
     },
-    // Real destructive-action confirmer for shutdown/restart/sleep,
-    // file deletion, etc. — the *same* real dialog, since both are
-    // fundamentally "ask the person before doing something sensitive."
     async (request) =>
       confirmationBridge.prompt(
         `Confirm: ${request.action}`,
@@ -103,6 +97,91 @@ async function initialize(): Promise<void> {
     },
   });
 
+  let isVoiceTurnRunning = false;
+  async function executeVoiceTurn(): Promise<void> {
+    if (isVoiceTurnRunning) {
+      log.info("voice turn already running, interrupting");
+      core?.voice.pipeline.interrupt();
+      return;
+    }
+    isVoiceTurnRunning = true;
+    log.info("voice turn requested");
+    if (!core) {
+      isVoiceTurnRunning = false;
+      return;
+    }
+    mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
+      orbStatus: "listening",
+      connection: "connected",
+    });
+    try {
+      const device = core.webShell.getDeviceState();
+      let result = await core.voice.pipeline.runTurn(device);
+      let bargeInContinuations = 0;
+      while (result.bargeIn && bargeInContinuations < 3) {
+        const bargeTranscript = result.bargeIn.transcript.trim();
+        if (
+          !bargeTranscript ||
+          /^\[.*\]$/.test(bargeTranscript) ||
+          /^\(.*\)$/.test(bargeTranscript)
+        ) {
+          break;
+        }
+        bargeInContinuations += 1;
+        log.info("continuing turn after real barge-in", {
+          transcriptLength: bargeTranscript.length,
+        });
+        result = await core.voice.pipeline.runTurn(
+          device,
+          undefined,
+          16000,
+          bargeTranscript,
+        );
+      }
+      mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
+        orbStatus: "idle",
+        connection: "connected",
+      });
+      log.info("voice turn completed", {
+        handledByCommand: result.handledByCommand,
+        transcriptLength: result.transcript.length,
+      });
+      await recordVoiceTurn?.(result.transcript, result.spokenResponse, result.toolActivity);
+    } catch (err) {
+      log.warn("voice turn could not complete", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
+        orbStatus: "idle",
+        connection: "offline",
+      });
+    } finally {
+      isVoiceTurnRunning = false;
+    }
+  }
+
+  function registerPttShortcut(shortcutKey?: string): void {
+    const key = shortcutKey || "CommandOrControl+Shift+Space";
+    try {
+      globalShortcut.unregisterAll();
+      const success = globalShortcut.register(key, () => {
+        log.info("PTT global shortcut triggered", { key });
+        if (mainWindow) {
+          if (!mainWindow.isVisible()) {
+            mainWindow.show();
+          }
+          mainWindow.focus();
+        }
+        void executeVoiceTurn();
+      });
+      log.info("PTT global shortcut registration status", { key, success });
+    } catch (err) {
+      log.warn("failed to register PTT global shortcut", { key, error: String(err) });
+    }
+  }
+
+  registerPttShortcut(settings.pushToTalkShortcut);
+
   async function broadcastAudioStatus(): Promise<void> {
     if (!core || !mainWindow || mainWindow.isDestroyed()) return;
     await core.voice.deviceManager.refresh();
@@ -124,16 +203,14 @@ async function initialize(): Promise<void> {
         : {}),
     });
   }
-  // Real device hot-plug/permission changes flow: renderer's `devicechange`
-  // listener -> RendererAudioBridge's `onDeviceChange` -> `deviceManager.refresh()`
-  // (diffs and emits these) -> here -> the renderer's Settings UI, kept in sync
-  // without polling.
+
   core.webShell.eventBus.subscribe({ type: "voice_engine.device_connected" }, () => {
     void broadcastAudioStatus();
   });
   core.webShell.eventBus.subscribe({ type: "voice_engine.device_disconnected" }, () => {
     void broadcastAudioStatus();
   });
+
   registerIpcHandlers({
     core,
     getSettingsWindows: () =>
@@ -147,70 +224,7 @@ async function initialize(): Promise<void> {
       }
       settingsWindow = createSettingsWindow(mainWindow);
     },
-    startVoiceTurn: async () => {
-      log.info("voice turn requested");
-      if (!core) return;
-      mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
-        orbStatus: "listening",
-        connection: "connected",
-      });
-      try {
-        const device = core.webShell.getDeviceState();
-        // Real, automatic barge-in (docs/adr/0018): if the user started
-        // talking while RYPER was still speaking, `runTurn()` already
-        // stopped playback and transcribed the interruption â€” continue
-        // the conversation with it immediately, bounded so a
-        // misdetection can't loop forever.
-        let result = await core.voice.pipeline.runTurn(device);
-        let bargeInContinuations = 0;
-        while (result.bargeIn && bargeInContinuations < 3) {
-          const bargeTranscript = result.bargeIn.transcript.trim();
-          if (
-            !bargeTranscript ||
-            /^\[.*\]$/.test(bargeTranscript) ||
-            /^\(.*\)$/.test(bargeTranscript)
-          ) {
-            break;
-          }
-          bargeInContinuations += 1;
-          log.info("continuing turn after real barge-in", {
-            transcriptLength: bargeTranscript.length,
-          });
-          result = await core.voice.pipeline.runTurn(
-            device,
-            undefined,
-            16000,
-            bargeTranscript,
-          );
-        }
-        mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
-          orbStatus: "idle",
-          connection: "connected",
-        });
-        log.info("voice turn completed", {
-          handledByCommand: result.handledByCommand,
-          transcriptLength: result.transcript.length,
-        });
-        // Real conversation-history persistence for voice turns (Tier 1
-        // UI brief section I â€” "conversation rendering"): previously a
-        // spoken exchange existed only as TTS audio and a
-        // `VoiceContextManager` memory entry, invisible in the chat
-        // window's persisted history. This gives it the same visible
-        // home text turns already have.
-        await recordVoiceTurn?.(result.transcript, result.spokenResponse, result.toolActivity);
-      } catch (err) {
-        // A real turn can still fail for real reasons â€” no microphone/speaker device,
-        // permission denied, device disconnected mid-turn (see docs/PROJECT_STATE.md's
-        // Phase 13.6 known limitations) â€” reported honestly to the UI, not hidden.
-        log.warn("voice turn could not complete", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-        mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
-          orbStatus: "idle",
-          connection: "offline",
-        });
-      }
-    },
+    startVoiceTurn: executeVoiceTurn,
     stopVoiceTurn: async () => {
       log.info("voice turn interrupt requested");
       core?.voice.pipeline.interrupt();
@@ -219,14 +233,6 @@ async function initialize(): Promise<void> {
         connection: "connected",
       });
     },
-  });
-
-  mainWindow = createMainWindow();
-  mainWindow.webContents.on("console-message", (_event, level, message) => {
-    log.info(`[RENDERER console:${level}] ${message}`);
-  });
-  mainWindow.webContents.once('did-finish-load', () => {
-    void broadcastAudioStatus();
   });
 
   createTray(mainWindow, {
@@ -247,12 +253,10 @@ async function initialize(): Promise<void> {
       void core?.settings.update({ voiceEnabled: enabled });
     },
     startPushToTalk: () => {
-      mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
-        orbStatus: "listening",
-        connection: "connected",
-      });
+      void executeVoiceTurn();
     },
     stopPushToTalk: () => {
+      core?.voice.pipeline.interrupt();
       mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
         orbStatus: "idle",
         connection: "connected",
@@ -271,6 +275,10 @@ async function initialize(): Promise<void> {
 
   log.info("initialization complete");
 }
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
 
 app.on("before-quit", () => {
   destroyTray();
