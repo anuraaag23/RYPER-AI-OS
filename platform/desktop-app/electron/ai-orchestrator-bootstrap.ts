@@ -47,6 +47,7 @@ import {
   LlamaServerStartError,
   type LlamaModelDiagnostics,
 } from "./llm-model-provisioning.js";
+import { createDesktopToolSelector } from "./desktop-tool-selector.js";
 
 const REFERENCE_DEVICE_CAPABILITIES = {
   cpuCores: 4,
@@ -364,6 +365,7 @@ export async function bootstrapAIOrchestrator(
     sessionManager,
     eventBus,
     localStreamTimeoutMs: localStreamTimeoutMs(),
+    toolSelector: createDesktopToolSelector(),
   });
 
   return { orchestrator, llmDiagnostics, localLLMActive, cloudLLMConfigured, sessionManager };

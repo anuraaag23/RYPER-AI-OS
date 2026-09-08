@@ -91,7 +91,7 @@ export function createOpenAICompatibleProvider(
                 }
               : {}),
           })),
-          ...(request.tools
+          ...(request.tools && request.tools.length > 0
             ? {
                 tools: request.tools.map((t) => ({
                   type: "function",

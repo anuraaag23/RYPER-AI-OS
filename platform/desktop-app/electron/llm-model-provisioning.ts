@@ -47,7 +47,7 @@ export function defaultLlamaServerPaths(userDataDir: string): LlamaServerPaths {
       join(modelsDir, "llama", `llama-server${bin}`),
     modelPath: process.env["RYPER_LLAMA_MODEL"] ?? join(modelsDir, "llama", "model.gguf"),
     port: Number(process.env["RYPER_LLAMA_SERVER_PORT"] ?? 8090),
-    contextSize: envCtx ? Number(envCtx) : 8192,
+    contextSize: envCtx ? Number(envCtx) : 4096,
   };
 }
 
@@ -124,7 +124,7 @@ export class LlamaServerManager {
       throw new LlamaServerStartError(`Unsafe or invalid binary path: "${paths.binaryPath}"`);
     }
 
-    const ctx = paths.contextSize ?? 8192;
+    const ctx = paths.contextSize ?? 4096;
     this.handle = this.processRunner(paths.binaryPath, [
       "-m",
       paths.modelPath,
@@ -134,6 +134,11 @@ export class LlamaServerManager {
       "127.0.0.1",
       "-c",
       String(ctx),
+      // Single-user desktop assistant requires only 1 parallel slot.
+      // llama-server defaults to -np 4, which quadruples KV cache allocation
+      // and exhausts GPU VRAM on 6GB/8GB laptop GPUs.
+      "-np",
+      "1",
       // Required for correct structured tool-calling (docs/adr/0021):
       // without `--jinja`, llama.cpp's server does not render the GGUF's
       // embedded Jinja chat template, which is what encodes Qwen3's (and

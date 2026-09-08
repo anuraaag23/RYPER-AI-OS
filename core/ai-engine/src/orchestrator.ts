@@ -3,7 +3,7 @@ import type { EventBus } from "@ryper/event-bus";
 import type { TelemetryClient } from "@ryper/telemetry";
 import type { RoutingHint, DeviceState } from "@ryper/model-router";
 
-import type { AIProvider, ChatMessage, StreamEvent, ToolCallRequest } from "./types.js";
+import type { AIProvider, ChatMessage, StreamEvent, ToolCallRequest, ToolSpec } from "./types.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { ModelSelectionEngine } from "./model-selection.js";
 import type { PromptBuilder } from "./prompt-builder.js";
@@ -14,6 +14,17 @@ import { retryWithBackoff, ProviderError, type RetryOptions } from "./error-reco
 import { withTimeout } from "./streaming.js";
 
 const log = createLogger("ai-engine:orchestrator");
+
+/**
+ * Selects a subset of available tools based on user utterance and context.
+ * Used to avoid saturating context window and prefill latency when a request
+ * does not require the entire catalog of tools.
+ */
+export type ToolSelector = (
+  userText: string,
+  allTools: readonly ToolSpec[],
+  messages: readonly ChatMessage[],
+) => readonly ToolSpec[];
 
 export interface SendMessageOptions {
   readonly routingHint?: RoutingHint;
@@ -49,6 +60,7 @@ export interface AIOrchestratorOptions {
    */
   readonly localStreamTimeoutMs?: number;
   readonly retry?: Partial<RetryOptions>;
+  readonly toolSelector?: ToolSelector | undefined;
 }
 
 /**
@@ -63,11 +75,13 @@ export class AIOrchestrator {
   private readonly streamTimeoutMs: number;
   private readonly localStreamTimeoutMs: number;
   private readonly retryOptions: RetryOptions;
+  private readonly toolSelector: ToolSelector | undefined;
 
   constructor(private readonly options: AIOrchestratorOptions) {
     this.maxToolRounds = options.maxToolRounds ?? 5;
     this.streamTimeoutMs = options.streamTimeoutMs ?? 30_000;
     this.localStreamTimeoutMs = options.localStreamTimeoutMs ?? this.streamTimeoutMs;
+    this.toolSelector = options.toolSelector;
     this.retryOptions = {
       maxAttempts: options.retry?.maxAttempts ?? 2,
       initialDelayMs: options.retry?.initialDelayMs ?? 250,
@@ -115,9 +129,15 @@ export class AIOrchestrator {
       let roundText = "";
       let sawToolCalls = false;
 
+      const allTools = this.options.toolRegistry.listSpecs();
+      const selectedTools = this.toolSelector
+        ? this.toolSelector(userText, allTools, messages)
+        : allTools;
+      const tools = selectedTools.length > 0 ? selectedTools : undefined;
+
       const stream = this.runProviderRound(selection.provider, {
         messages,
-        tools: this.options.toolRegistry.listSpecs(),
+        ...(tools !== undefined ? { tools } : {}),
         signal: sendOptions.signal,
       });
 
