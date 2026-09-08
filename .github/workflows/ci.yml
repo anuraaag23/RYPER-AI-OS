@@ -67,5 +67,33 @@ jobs:
       - name: Build desktop application bundle
         run: npm run build --workspace=@ryper/desktop-app
 
+      - name: Isolate runner environment from host browser
+        shell: pwsh
+        run: |
+          Get-Process -Name msedge*, MicrosoftEdge* -ErrorAction SilentlyContinue | Stop-Process -Force
+          $paths = @(
+            "C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          )
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Rename-Item -Path $p -NewName "msedge.exe.ci-isolated" -Force -ErrorAction SilentlyContinue
+            }
+          }
+
       - name: Run automated tests
         run: npm test
+
+      - name: Restore host browser
+        if: always()
+        shell: pwsh
+        run: |
+          $paths = @(
+            "C:\Program Files\Microsoft\Edge\Application\msedge.exe.ci-isolated",
+            "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe.ci-isolated"
+          )
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Rename-Item -Path $p -NewName "msedge.exe" -Force -ErrorAction SilentlyContinue
+            }
+          }
