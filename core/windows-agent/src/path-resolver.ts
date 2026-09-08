@@ -71,11 +71,16 @@ export class PathResolver {
 
   /** Resolves free text naming a known folder ("my downloads folder", "Desktop") to its real path, or `undefined` if the text doesn't name one this package recognizes. */
   async resolveKnownFolder(spokenText: string): Promise<string | undefined> {
-    const normalized = spokenText
+    const cleaned = spokenText
       .trim()
       .toLowerCase()
-      .replace(/^(my|the)\s+/, "")
-      .replace(/\s+folder$/, "");
+      .replace(/[,.?!;:"]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const normalized = cleaned
+      .replace(/^(my|the|open|go to)\s+/, "")
+      .replace(/\s+folder$/, "")
+      .trim();
     const folder = KNOWN_FOLDER_ALIASES[normalized];
     if (!folder) return undefined;
     return this.systemApi.getWellKnownFolderPath(folder);

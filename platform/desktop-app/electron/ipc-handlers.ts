@@ -501,6 +501,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         throw new TypeError(`invalid permission policy: ${String(policy)}`);
       }
       core.broker.setPolicy(cap, policy as PermissionPolicy, "ai-orchestrator");
+      core.broker.setPolicy(cap, policy as PermissionPolicy, "voice-session");
+      core.broker.setPolicy(cap, policy as PermissionPolicy);
       const currentSettings = await core.settings.load();
       const updatedPolicies = {
         ...(currentSettings.persistentPermissions ?? {}),
@@ -515,7 +517,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     for (const item of KNOWN_PERMISSION_CATEGORIES) {
       if (item.capability !== "notifications") {
         core.broker.revoke("ai-orchestrator", item.capability);
+        core.broker.revoke("voice-session", item.capability);
         core.broker.setPolicy(item.capability, "prompt", "ai-orchestrator");
+        core.broker.setPolicy(item.capability, "prompt", "voice-session");
+        core.broker.setPolicy(item.capability, "prompt");
       }
     }
     await core.settings.update({ persistentPermissions: {} });

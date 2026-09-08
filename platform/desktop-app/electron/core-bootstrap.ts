@@ -1,5 +1,5 @@
 import { createWebShell, type WebShell } from "@ryper/web-shell";
-import { CapabilityBroker, type ConsentPrompt } from "@ryper/security";
+import { CapabilityBroker, type ConsentPrompt, type Capability } from "@ryper/security";
 import { createCapabilityManager, type CapabilityManager } from "@ryper/platform-capability";
 import {
   createWindowsAdapter,
@@ -109,10 +109,23 @@ export async function bootstrapCore(
     webShell = createWebShell();
   });
 
+  let settings!: SettingsStore;
+  let loadedSettings!: Awaited<ReturnType<SettingsStore["load"]>>;
+  await report("settings", async () => {
+    settings = new SettingsStore(paths.settingsFile);
+    loadedSettings = await settings.load();
+  });
+
   let capabilityManager!: CapabilityManager;
   let broker!: CapabilityBroker;
   await report("security & platform capability layer", () => {
     broker = new CapabilityBroker(consentPrompt);
+    if (loadedSettings.persistentPermissions) {
+      broker.importPolicies(loadedSettings.persistentPermissions);
+      log.info("restored persistent permission policies from settings", {
+        count: Object.keys(loadedSettings.persistentPermissions).length,
+      });
+    }
     capabilityManager = createCapabilityManager({
       broker,
       platformDetector: detectPlatformId,
@@ -153,9 +166,22 @@ export async function bootstrapCore(
       for (const descriptor of WINDOWS_CAPABILITY_DESCRIPTORS) {
         capabilityManager.registerCapability(descriptor);
       }
-      // Safe, non-destructive desktop notifications: pre-authorizes the AI orchestrator actor
-      // so ToolRegistry.invoke's prior-grant check succeeds on real Windows runs (docs/adr/0021).
-      broker.grant("ai-orchestrator", "notifications");
+      // Safe, non-destructive desktop operations: pre-authorizes voice and AI orchestrator actors
+      // out-of-the-box so desktop tools and voice actions succeed seamlessly (docs/adr/0021),
+      // UNLESS the user has explicitly configured a persistent permission policy in Settings.
+      const DEFAULT_PRE_AUTHORIZED_CAPABILITIES: readonly Capability[] = [
+        "notifications",
+        "automation.execute",
+        "automation.read",
+        "filesystem.read",
+      ];
+      const persistent = loadedSettings.persistentPermissions ?? {};
+      for (const cap of DEFAULT_PRE_AUTHORIZED_CAPABILITIES) {
+        if (!persistent[cap]) {
+          broker.grant("ai-orchestrator", cap);
+          broker.grant("voice-session", cap);
+        }
+      }
     });
   } else {
     onDiagnostics({
@@ -168,18 +194,6 @@ export async function bootstrapCore(
   let conversations!: ConversationStore;
   await report("conversation history", () => {
     conversations = new ConversationStore(paths.conversationsFile);
-  });
-
-  let settings!: SettingsStore;
-  await report("settings", async () => {
-    settings = new SettingsStore(paths.settingsFile);
-    const loaded = await settings.load();
-    if (loaded.persistentPermissions) {
-      broker.importPolicies(loaded.persistentPermissions);
-      log.info("restored persistent permission policies from settings", {
-        count: Object.keys(loaded.persistentPermissions).length,
-      });
-    }
   });
 
   if (!process.env["VITEST"]) {

@@ -13,7 +13,7 @@ import { bootstrapCore, type RyperCore } from "./core-bootstrap.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
 import { createMainWindow, createSettingsWindow } from "./windows.js";
 import { createTray, destroyTray, getTrayStatus, setTrayTooltip } from "./tray.js";
-import { IPC_CHANNELS, type StartupDiagnostics } from "./ipc-contract.js";
+import { IPC_CHANNELS, type StartupDiagnostics, type VoiceOrbStatus } from "./ipc-contract.js";
 import { createConfirmationBridge } from "./confirmation-bridge.js";
 import { describeCapabilityRequest } from "./capability-presentation.js";
 import { createVoiceTurnRecorder, type VoiceTurnRecorder } from "./voice-turn-recorder.js";
@@ -38,6 +38,10 @@ async function initialize(): Promise<void> {
     log.info(`[RENDERER console:${level}] ${message}`);
   });
   mainWindow.webContents.once("did-finish-load", () => {
+    mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
+      orbStatus: "idle",
+      connection: "connected",
+    });
     void broadcastAudioStatus();
   });
 
@@ -110,6 +114,9 @@ async function initialize(): Promise<void> {
       isVoiceTurnRunning = false;
       return;
     }
+    if (core.voice.deviceManager.list("microphone").length === 0) {
+      await core.voice.deviceManager.refresh();
+    }
     mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
       orbStatus: "listening",
       connection: "connected",
@@ -153,7 +160,7 @@ async function initialize(): Promise<void> {
       });
       mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
         orbStatus: "idle",
-        connection: "offline",
+        connection: "connected",
       });
     } finally {
       isVoiceTurnRunning = false;
@@ -210,6 +217,26 @@ async function initialize(): Promise<void> {
   core.webShell.eventBus.subscribe({ type: "voice_engine.device_disconnected" }, () => {
     void broadcastAudioStatus();
   });
+  core.webShell.eventBus.subscribe({ type: "voice_engine.session_transition" }, (event) => {
+    const payload = event.payload as { to?: string } | undefined;
+    const to = payload?.to;
+    let orbStatus: VoiceOrbStatus = "idle";
+    if (to === "listening") {
+      orbStatus = "listening";
+    } else if (to === "transcribing" || to === "thinking" || to === "tool_execution" || to === "recovering") {
+      orbStatus = "thinking";
+    } else if (to === "speaking") {
+      orbStatus = "speaking";
+    } else {
+      orbStatus = "idle";
+    }
+
+    mainWindow?.webContents.send(IPC_CHANNELS.voiceState, {
+      orbStatus,
+      connection: "connected",
+    });
+  });
+  void broadcastAudioStatus();
 
   registerIpcHandlers({
     core,

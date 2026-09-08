@@ -123,7 +123,12 @@ export class VoicePipeline {
    */
   interrupt(): void {
     this.options.speakerManager.interrupt();
-    this.options.sessionManager.cancel();
+    const state = this.options.sessionManager.getSnapshot().state;
+    if (state !== "cancelled" && state !== "idle") {
+      try {
+        this.options.sessionManager.cancel();
+      } catch {}
+    }
   }
 
   /**
@@ -187,10 +192,16 @@ export class VoicePipeline {
       // capture/STT entirely) or capture ended on its own before any
       // trailing-silence endpoint was hit. Covered here so `thinking` is
       // always entered from a valid predecessor state.
-      if (sessionManager.getSnapshot().state === "listening") {
+      const snapshot = sessionManager.getSnapshot();
+      if (snapshot.state === "cancelled" || snapshot.state === "error" || snapshot.state === "idle") {
+        throw new Error(`voice session ended prematurely (${snapshot.state})`);
+      }
+      if (snapshot.state === "listening") {
         sessionManager.transition("transcribing");
       }
-      sessionManager.transition("thinking");
+      if (sessionManager.getSnapshot().state === "transcribing") {
+        sessionManager.transition("thinking");
+      }
       await this.options.contextManager.recordUserUtterance(session.sessionId, transcript);
 
       // Real, two-turn power-action confirmation interception (PART 1-3
@@ -273,12 +284,19 @@ export class VoicePipeline {
       await this.options.contextManager.recordAssistantUtterance(session.sessionId, spokenResponse);
       this.throwIfAborted(signal);
 
-      sessionManager.transition("speaking");
+      if (
+        sessionManager.getSnapshot().state !== "idle" &&
+        sessionManager.getSnapshot().state !== "cancelled"
+      ) {
+        sessionManager.transition("speaking");
+      }
       const bargeInTranscript = await this.timeStage("tts", () =>
         this.speak(spokenResponse, signal, sampleRateHz),
       );
 
-      sessionManager.transition("idle");
+      if (sessionManager.getSnapshot().state !== "idle") {
+        sessionManager.transition("idle");
+      }
       analytics.recordSessionCompleted(Date.now() - startedAt);
       void this.options.eventBus?.emit(
         "voice_engine.turn_completed",
@@ -334,7 +352,12 @@ export class VoicePipeline {
       if (event.type === "error") lastError = event.message;
     }
 
-    if (finalText === undefined || finalText.trim().length === 0) {
+    if (
+      finalText === undefined ||
+      finalText.trim().length === 0 ||
+      finalText.trim() === "[BLANK_AUDIO]" ||
+      finalText.trim() === "[BLANK_AUDIO]."
+    ) {
       // A real STT lifecycle edge case (see docs/adr/0029 and the
       // matching fix in `@ryper/voice-engine`'s `AudioPipelineManager`):
       // an empty/whitespace-only `final` transcript is treated the same

@@ -39,7 +39,7 @@ export function formatSanitizedDiagnostics(
 
   const payload = {
     app: "RYPER AI OS",
-    version: "0.1.1",
+    version: "0.1.2",
     channel: "Stable (Windows x64)",
     timestamp: new Date().toISOString(),
     runtime: {
@@ -253,7 +253,7 @@ export function SettingsApp(): JSX.Element {
     setTimeout(() => {
       setIsCheckingUpdates(false);
       setUpdateCheckStatus(
-        "You are running RYPER AI OS v0.1.1 (Stable Windows x64). Official releases are distributed via verified packages."
+        "You are running RYPER AI OS v0.1.2 (Stable Windows x64). Official releases are distributed via verified packages."
       );
     }, 600);
   };
@@ -631,7 +631,7 @@ export function SettingsApp(): JSX.Element {
             </div>
           </div>
           <div className="about-badges-block">
-            <span className="about-version-badge">v0.1.1</span>
+            <span className="about-version-badge">v0.1.2</span>
             <span className="about-channel-badge">Stable (Windows x64)</span>
           </div>
         </div>

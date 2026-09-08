@@ -6,14 +6,41 @@ import { VoiceOrb } from "../src/components/VoiceOrb.js";
 afterEach(cleanup);
 
 describe("VoiceOrb", () => {
-  it("renders the idle state caption", () => {
-    render(<VoiceOrb state="idle" connection="connected" onPress={() => undefined} />);
+  it("renders the idle state caption when microphone is available", () => {
+    render(<VoiceOrb state="idle" micStatus="available" onPress={() => undefined} />);
     expect(screen.getByText("Tap to talk")).toBeTruthy();
   });
 
-  it("shows a connection-status caption instead of the state caption when degraded", () => {
-    render(<VoiceOrb state="listening" connection="offline" onPress={() => undefined} />);
-    expect(screen.getByText("Offline")).toBeTruthy();
+  it("renders truthful active captions even if network is degraded or offline", () => {
+    const { unmount } = render(
+      <VoiceOrb state="listening" connection="offline" onPress={() => undefined} />,
+    );
+    expect(screen.getByText("Listening…")).toBeTruthy();
+    expect(screen.queryByText("Offline")).toBeNull();
+    unmount();
+
+    render(<VoiceOrb state="speaking" connection="offline" onPress={() => undefined} />);
+    expect(screen.getByText("Speaking…")).toBeTruthy();
+    expect(screen.queryByText("Offline")).toBeNull();
+  });
+
+  it("shows Microphone unavailable when microphone hardware is unavailable in idle state", () => {
+    render(<VoiceOrb state="idle" micStatus="unavailable" onPress={() => undefined} />);
+    expect(screen.getByText("Microphone unavailable")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Microphone unavailable" })).toBeTruthy();
+  });
+
+  it("shows Microphone access is off when microphone permission is denied in idle state", () => {
+    render(<VoiceOrb state="idle" micStatus="permission-denied" onPress={() => undefined} />);
+    expect(screen.getByText("Microphone access is off")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Microphone access is off" })).toBeTruthy();
+  });
+
+  it("shows Reconnecting… when connection is degraded in idle state", () => {
+    render(
+      <VoiceOrb state="idle" micStatus="available" connection="degraded" onPress={() => undefined} />,
+    );
+    expect(screen.getByText("Reconnecting…")).toBeTruthy();
   });
 
   it("calls onPress when clicked", () => {
@@ -38,10 +65,5 @@ describe("VoiceOrb", () => {
   it("gives the button a real accessible name matching the visible caption, for screen reader users", () => {
     render(<VoiceOrb state="listening" connection="connected" onPress={() => undefined} />);
     expect(screen.getByRole("button", { name: "Listening…" })).toBeTruthy();
-  });
-
-  it("announces a connection problem as the button's accessible name too, not just visually", () => {
-    render(<VoiceOrb state="speaking" connection="offline" onPress={() => undefined} />);
-    expect(screen.getByRole("button", { name: "Offline" })).toBeTruthy();
   });
 });

@@ -110,10 +110,22 @@ export class CapabilityBroker {
     } else if (policy === "denied") {
       if (actorId) {
         this.grants.set(this.key(actorId, capability), "denied");
+      } else {
+        for (const key of this.grants.keys()) {
+          if (key.endsWith(`::${capability}`)) {
+            this.grants.set(key, "denied");
+          }
+        }
       }
     } else if (policy === "prompt") {
       if (actorId) {
         this.grants.delete(this.key(actorId, capability));
+      } else {
+        for (const key of this.grants.keys()) {
+          if (key.endsWith(`::${capability}`)) {
+            this.grants.delete(key);
+          }
+        }
       }
     }
   }
@@ -136,12 +148,13 @@ export class CapabilityBroker {
 
   importPolicies(policies: Record<string, PermissionPolicy>): void {
     for (const [k, v] of Object.entries(policies)) {
-      this.policies.set(k, v);
-      if (v === "always" && k.includes("::")) {
+      if (k.includes("::")) {
         const [actor, cap] = k.split("::");
         if (actor && cap) {
-          this.grant(actor, cap as Capability);
+          this.setPolicy(cap as Capability, v, actor);
         }
+      } else {
+        this.setPolicy(k as Capability, v);
       }
     }
   }
@@ -176,15 +189,14 @@ export class CapabilityBroker {
   }
 
   hasGrant(actorId: string, capability: Capability): boolean {
-    const decision = this.grants.get(this.key(actorId, capability));
-    if (decision === "granted") return true;
-    if (decision === "denied") return false;
     const policy = this.getPolicy(capability, actorId);
+    if (policy === "denied") return false;
     if (policy === "always") {
       this.grant(actorId, capability);
       return true;
     }
-    return false;
+    const decision = this.grants.get(this.key(actorId, capability));
+    return decision === "granted";
   }
 
   revoke(actorId: string, capability: Capability): void {

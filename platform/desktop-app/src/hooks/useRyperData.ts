@@ -6,6 +6,7 @@ import type {
   ConnectionStatus,
   CurrentReferencePayload,
   AIStatusPayload,
+  AudioStatusPayload,
   TurnProgressPayload,
 } from "../../electron/ipc-contract.js";
 import { sanitizeUserFacingError } from "../lib/user-error-sanitizer.js";
@@ -279,6 +280,33 @@ export function useVoiceState(): { status: VoiceOrbStatus; connection: Connectio
   );
 
   return { status, connection };
+}
+
+export function useAudioStatus(): AudioStatusPayload | undefined {
+  const [status, setStatus] = useState<AudioStatusPayload | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    if (typeof window?.ryper?.getAudioStatus === "function") {
+      void window.ryper
+        .getAudioStatus()
+        .then((s) => {
+          if (active && s) setStatus(s);
+        })
+        .catch(() => {
+          // ignore error
+        });
+    }
+    const unsub = window?.ryper?.onAudioStatusChanged?.((s) => {
+      if (active && s) setStatus(s);
+    });
+    return () => {
+      active = false;
+      unsub?.();
+    };
+  }, []);
+
+  return status;
 }
 
 /**

@@ -5,6 +5,7 @@ import { VoiceOrb } from "./VoiceOrb.js";
 import {
   useMessages,
   useVoiceState,
+  useAudioStatus,
   useCurrentReference,
   useAIStatus,
 } from "../hooks/useRyperData.js";
@@ -50,6 +51,7 @@ export function ChatPanel({ conversationId, onStartConversation }: ChatPanelProp
     cancel,
   } = useMessages(conversationId);
   const voice = useVoiceState();
+  const audioStatus = useAudioStatus();
   const aiStatus = useAIStatus();
   const currentReference = useCurrentReference(messages.length);
   const listRef = useRef<HTMLDivElement>(null);
@@ -321,7 +323,12 @@ export function ChatPanel({ conversationId, onStartConversation }: ChatPanelProp
         </div>
       )}
       <div className="chat-panel-footer">
-        <VoiceOrb state={voice.status} connection={voice.connection} onPress={onOrbPress} />
+        <VoiceOrb
+          state={voice.status}
+          connection={voice.connection}
+          micStatus={audioStatus?.microphone}
+          onPress={onOrbPress}
+        />
         <Composer onSend={handleSend} disabled={sending} />
       </div>
     </div>

@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 **/node_modules/
 dist/
 **/dist/
@@ -11,10 +11,11 @@ dist-renderer/
 **/dist-release/*.yml
 **/dist-release/*.blockmap
 **/dist-release/win-unpacked/
-!**/dist-release/SHA256SUMS.txt
+!**/dist-release/SHA256SUMS*.txt
 coverage/
 **/coverage/
 *.log
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+scratch/

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildVoiceOrbViewModel, type VoiceOrbState } from "@ryper/components";
-import type { ConnectionStatus } from "../../electron/ipc-contract.js";
+import type { AudioAvailability, ConnectionStatus } from "../../electron/ipc-contract.js";
 
 export interface VoiceOrbProps {
   readonly state: VoiceOrbState;
-  readonly connection: ConnectionStatus;
+  readonly connection?: ConnectionStatus;
+  readonly micStatus?: AudioAvailability;
   readonly onPress: () => void;
 }
 
@@ -15,10 +16,8 @@ const STATE_LABEL: Record<VoiceOrbState, string> = {
   speaking: "Speaking…",
 };
 
-const CONNECTION_LABEL: Record<ConnectionStatus, string | undefined> = {
-  connected: undefined,
+const CONNECTION_LABEL: Partial<Record<ConnectionStatus, string>> = {
   degraded: "Reconnecting…",
-  offline: "Offline",
 };
 
 /**
@@ -33,7 +32,7 @@ const CONNECTION_LABEL: Record<ConnectionStatus, string | undefined> = {
  * known gaps for that honestly-deferred piece of the brief's "physics-
  * based... refraction" voice orb ask.
  */
-export function VoiceOrb({ state, connection, onPress }: VoiceOrbProps): JSX.Element {
+export function VoiceOrb({ state, connection, micStatus, onPress }: VoiceOrbProps): JSX.Element {
   const viewModel = useMemo(() => buildVoiceOrbViewModel(state), [state]);
   const [pulsePhase, setPulsePhase] = useState(0);
 
@@ -49,10 +48,27 @@ export function VoiceOrb({ state, connection, onPress }: VoiceOrbProps): JSX.Ele
     return () => cancelAnimationFrame(raf);
   }, [viewModel.pulse]);
 
-  const connectionLabel = CONNECTION_LABEL[connection];
   const scale = viewModel.pulse ? 1 + Math.sin(pulsePhase * Math.PI * 2) * 0.06 : 1;
-  const currentLabel = connectionLabel ?? STATE_LABEL[viewModel.state];
-  const tooltip = viewModel.state === "idle" ? "Tap to talk (Ctrl + Shift + Space)" : currentLabel;
+
+  let currentLabel: string;
+  let tooltip: string;
+
+  if (viewModel.state !== "idle") {
+    currentLabel = STATE_LABEL[viewModel.state];
+    tooltip = currentLabel;
+  } else if (micStatus === "unavailable") {
+    currentLabel = "Microphone unavailable";
+    tooltip = "Microphone unavailable — please connect a microphone";
+  } else if (micStatus === "permission-denied") {
+    currentLabel = "Microphone access is off";
+    tooltip = "Microphone access is off — grant microphone permission in Settings";
+  } else if (connection === "degraded") {
+    currentLabel = CONNECTION_LABEL.degraded ?? "Reconnecting…";
+    tooltip = currentLabel;
+  } else {
+    currentLabel = STATE_LABEL.idle;
+    tooltip = "Tap to talk (Ctrl + Shift + Space)";
+  }
 
   return (
     <div className="voice-orb-wrap" role="group" aria-label="Voice assistant">

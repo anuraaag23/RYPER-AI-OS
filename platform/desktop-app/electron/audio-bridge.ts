@@ -119,6 +119,8 @@ export interface RendererIpcReceiver {
 export interface RendererAudioBridgeOptions {
   /** How long to wait for a renderer reply before treating it as unavailable. Default 8000ms. */
   readonly requestTimeoutMs?: number;
+  /** How long to wait for audio playback completion before timing out. Default 60000ms. */
+  readonly playbackTimeoutMs?: number;
   /**
    * Called whenever the renderer reports `navigator.mediaDevices.ondevicechange`
    * (a device was plugged in, unplugged, or the OS default changed). The
@@ -233,6 +235,7 @@ export class RendererAudioBridge
   implements AudioDeviceSource, AudioCaptureSource, AudioPlaybackSink
 {
   private readonly timeoutMs: number;
+  private readonly playbackTimeoutMs: number;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly activeCaptures = new Map<string, CaptureQueue>();
   /**
@@ -250,6 +253,7 @@ export class RendererAudioBridge
     options: RendererAudioBridgeOptions = {},
   ) {
     this.timeoutMs = options.requestTimeoutMs ?? 8000;
+    this.playbackTimeoutMs = options.playbackTimeoutMs ?? 60_000;
 
     this.ipc.on(AUDIO_IPC_CHANNELS.fromRenderer.listDevicesResult, (_e, r: ListDevicesResult) =>
       this.resolvePending(r.requestId, r),
@@ -441,9 +445,9 @@ export class RendererAudioBridge
         resolve({
           requestId,
           ok: false,
-          error: `renderer audio bridge did not confirm playback completion within ${this.timeoutMs}ms`,
+          error: `renderer audio bridge did not confirm playback completion within ${this.playbackTimeoutMs}ms`,
         });
-      }, this.timeoutMs);
+      }, this.playbackTimeoutMs);
       this.pending.set(requestId, {
         resolve: (v: unknown) => {
           clearTimeout(timer);

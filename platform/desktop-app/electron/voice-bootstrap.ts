@@ -172,7 +172,9 @@ export async function bootstrapVoice(
   deviceManagerHolder.current = deviceManager;
   const microphoneManager = new MicrophoneManager(deviceManager, audioBridge);
   const speakerManager = new SpeakerManager(deviceManager, audioBridge);
-  const vad = new EnergyVoiceActivityDetector({ energyThreshold: 200 });
+  const vad = new EnergyVoiceActivityDetector({
+    energyThreshold: Number(process.env.RYPER_VAD_THRESHOLD) || 500,
+  });
 
   const modelRegistry = new ModelRegistry();
   const modelSelector = new ModelSelector(modelRegistry);

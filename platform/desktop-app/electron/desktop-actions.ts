@@ -1581,7 +1581,8 @@ export const desktopActions = {
   ): Promise<DesktopActionResult> {
     if (!path) return { ok: false, message: "Which folder should I open?" };
     let resolvedPath = stripWrappingQuotes(path);
-    const normalized = resolvedPath.trim().toLowerCase().replace(/^(my|the)\s+/, "").replace(/\s+folder$/, "");
+    const cleaned = resolvedPath.trim().toLowerCase().replace(/[,.?!;:"]+/g, " ").replace(/\s+/g, " ").trim();
+    const normalized = cleaned.replace(/^(my|the)\s+/, "").replace(/\s+folder$/, "").trim();
     if (["downloads", "desktop", "documents", "pictures", "videos", "music"].includes(normalized)) {
       try {
         const resolved = (await capabilityManager.invoke(

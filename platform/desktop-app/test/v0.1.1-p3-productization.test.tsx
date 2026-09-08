@@ -252,7 +252,7 @@ describe("P3-4: Diagnostics & Support UX", () => {
     const parsed = JSON.parse(jsonStr);
 
     expect(parsed.app).toBe("RYPER AI OS");
-    expect(parsed.version).toBe("0.1.1");
+    expect(parsed.version).toBe("0.1.2");
     expect(parsed.channel).toBe("Stable (Windows x64)");
     expect(parsed.runtime.gatewayStatus).toBe("healthy");
     expect(parsed.localAI.readinessState).toBe("ready");
@@ -298,7 +298,7 @@ describe("P3-5: Version & Update UX Foundation", () => {
     await screen.findByText("About & Updates");
 
     expect(screen.getByText("RYPER AI OS")).toBeTruthy();
-    expect(screen.getByText("v0.1.1")).toBeTruthy();
+    expect(screen.getByText("v0.1.2")).toBeTruthy();
     expect(screen.getByText("Stable (Windows x64)")).toBeTruthy();
     expect(
       screen.getByText(/Official releases are distributed via verified release packages/i),
