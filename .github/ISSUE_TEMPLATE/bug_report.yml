@@ -1,0 +1,90 @@
+name: Bug Report
+description: Create a report to help us improve RYPER AI OS
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please do NOT include any API keys, credentials, or private personal data in this issue.
+  - type: input
+    id: version
+    attributes:
+      label: RYPER AI OS Version
+      description: What version of RYPER AI OS are you running? (e.g. v0.1.1)
+      placeholder: "v0.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows Version
+      description: Select your Windows operating system version
+      options:
+        - Windows 11 (64-bit)
+        - Windows 10 (64-bit)
+        - Other (specify below)
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware Configuration
+      description: Relevant hardware specs (CPU, RAM, GPU model, VRAM)
+      placeholder: |
+        - CPU: Intel Core i7-12700 / AMD Ryzen 7 5800X
+        - RAM: 16 GB
+        - GPU: NVIDIA RTX 3060 12GB / Integrated Intel UHD
+    validations:
+      required: false
+  - type: checkboxes
+    id: components
+    attributes:
+      label: Subsystems Involved
+      options:
+        - label: Local AI Engine (llama.cpp / model inference)
+        - label: Voice & Audio (whisper.cpp / Piper / Push-to-Talk)
+        - label: Windows System Automation (apps, volume, window control)
+        - label: User Interface / Settings
+        - label: Setup / Installer / Onboarding
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the problem.
+      placeholder: |
+        1. Open RYPER AI OS
+        2. Ask: '...'
+        3. Observe error: '...'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized Diagnostics / Logs
+      description: Paste the output of 'Copy Diagnostics' from Settings > Diagnostics (usernames/paths are automatically sanitized).
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I confirm that no passwords, API keys, or private personal data are included in this report.
+          required: true
+        - label: I have searched existing issues to ensure this is not a duplicate.
+          required: false

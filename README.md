@@ -1,174 +1,226 @@
 # RYPER AI OS
 
-Monorepo for RYPER AI OS — a single AI assistant present across Windows,
-macOS, Linux, Android, iOS/iPadOS, and the web, offline-first and
-privacy-first by design. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-for the original approved Phase 1 architecture, and
-[`docs/adr/`](docs/adr/) for every significant decision made since,
-including where later phases deliberately deviated from that original
-plan (most notably [`docs/adr/0014`](docs/adr/0014-electron-desktop-shell.md),
-on the desktop shell's framework).
+> **Privacy-first, offline-capable AI desktop assistant for Windows that combines local AI inference with controlled Windows system actions, voice interaction, diagnostics, and a secure permission model.**
 
-**Current state (Phase 13.9, see [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
-for the complete phase-by-phase history):** a real, tested, 28-package
-TypeScript Core (AI orchestration, memory, planning, voice, tool-calling,
-plugins, platform capability layer, a production Windows platform agent)
-and a real, working Electron desktop application — the first genuinely
-usable end-to-end slice of the product, not a prototype — including a
-real microphone/speaker audio bridge (Phase 13.6; see
-[`docs/adr/0017`](docs/adr/0017-renderer-mediated-audio-bridge.md)),
-real local Whisper/Piper speech-to-text and text-to-speech providers
-with real, automatic barge-in (Phase 13.7; see
-[`docs/adr/0018`](docs/adr/0018-local-stt-tts-and-automatic-bargein.md)),
-and a real LLM provider — a locally-managed llama.cpp server by
-default, explicit-only optional cloud providers — wired into the
-existing `AIOrchestrator` as the **primary** provider whenever a real
-binary+model are actually detected/running (Phase 13.9; see
-[`docs/adr/0020`](docs/adr/0020-real-llm-provider-and-tool-call-validation.md)).
-**This does not remove the deterministic pattern-matcher
-(`HeuristicToolCallingProvider`)** — it remains registered as the
-honest, always-available last-resort fallback whenever no real
-local/cloud LLM is actually reachable (the same real precedence
-pattern Phase 13.7 already established for STT/TTS's
-`ReferenceVoiceRuntimeProvider` fallback — see
-[`platform/desktop-app/electron/ai-orchestrator-bootstrap.ts`](platform/desktop-app/electron/ai-orchestrator-bootstrap.ts)'s
-own doc comment for the exact registration order and conditions). An
-earlier version of this README described the real LLM provider as
-"replacing" the pattern-matcher placeholder outright — that wording
-was inaccurate and has been corrected here (see
-[`docs/adr/0030`](docs/adr/0030-universal-open-power-management-lifecycle-hardening.md)'s
-documentation-reconciliation section); nothing about the actual
-runtime behavior changed, only this description of it.
-Phase 13.8 actually built whisper.cpp from source and ran a real Piper
-install against this real provider code (real, non-silent audio
-produced and inspected) in a sandboxed environment with no audio
-hardware and no Windows — see
-[`docs/adr/0019`](docs/adr/0019-phase-13-8-real-verification-findings.md)
-for exactly what that did and did not prove.
-Every package builds, tests, lints, and formats clean from a cold
-`npm ci`.
+[![Release](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/anuraaag23/RYPER-AI-OS/releases/tag/v0.1.1)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078D6.svg)](https://github.com/anuraaag23/RYPER-AI-OS/releases/tag/v0.1.1)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Local AI Engine](https://img.shields.io/badge/local%20AI-llama.cpp-orange.svg)](https://github.com/ggerganov/llama.cpp)
 
-## Requirements
+---
 
-- Node.js `>= 20` (see `.nvmrc`)
-- npm `>= 10` (npm workspaces are used for the monorepo — no separate
-  package manager install required)
+## What is RYPER AI OS?
 
-## Getting started
+**RYPER AI OS** is a private, on-device AI desktop assistant built specifically for Windows. Unlike cloud-only assistants that route your queries, files, and voice recordings through external servers, RYPER is designed to execute large language model inference and speech processing **locally on your own PC**.
 
-```bash
-npm install
-npm run build          # tsc --build across every package's project reference
-npm test                # vitest, run across every package
-npm run lint             # eslint, zero warnings allowed
-npm run format:check      # prettier --check
-npm run ci                 # everything CI runs, in one command
+RYPER bridges local intelligence with your desktop environment:
+- **Local AI Brain:** Runs quantized GGUF language models directly on your hardware via an embedded `llama.cpp` server on `127.0.0.1`.
+- **System Action Engine:** Automates Windows tasks—launching applications, controlling media/volume, querying system health, managing processes, and organizing files.
+- **Permission & Security Model:** Every mutating or sensitive operating system action is guarded by an internal Capability Broker and requires explicit user confirmation before execution.
+- **Private Voice Pipeline:** Includes push-to-talk speech recognition (`whisper.cpp`) and offline text-to-speech (`Piper`) supporting English, Hindi, and Hinglish.
+
+### Privacy Reality & Scope
+We believe in absolute transparency about what "privacy-first" means in practice:
+- **Local Mode:** In standard local mode, your prompts, context, and completions never leave your computer.
+- **Configurable Cloud Providers:** If you explicitly choose to configure external cloud API keys (e.g. OpenAI, Anthropic, OpenRouter), queries will route to those providers over HTTPS as instructed.
+- **External Web Actions:** Asking RYPER to open websites or launch web searches will open your default browser and create expected external network requests.
+- **Telemetry:** In the current implementation, application telemetry is strictly disabled by default. No background analytics or prompt logs are sent to remote servers.
+
+---
+
+## Current Release: v0.1.1 (Windows x64)
+
+The current official release of RYPER AI OS is **v0.1.1** for **Windows 10/11 (64-bit)**.
+
+- **Release Date:** September 8, 2026
+- **Release Package:** `RYPER.AI.OS.Setup.0.1.1.exe`
+- **Release Commit:** `22f919e9113f0cd1c4373df9557eee707c96d3d1`
+- **Release Tag:** [`v0.1.1`](https://github.com/anuraaag23/RYPER-AI-OS/releases/tag/v0.1.1)
+
+---
+
+## Download
+
+Download the official Windows installer directly from the GitHub Release page:
+
+📥 **[Download RYPER AI OS v0.1.1 Setup (64-bit)](https://github.com/anuraaag23/RYPER-AI-OS/releases/download/v0.1.1/RYPER.AI.OS.Setup.0.1.1.exe)**
+
+> [!NOTE]
+> **Windows SmartScreen Notice:**
+> The v0.1.1 installer executable is currently unsigned (Authenticode code-signing certificate is planned for v0.2.0).
+> When installing, Windows SmartScreen may show an **"Unknown Publisher"** or **"Windows protected your PC"** dialog.
+> To proceed: click **"More info"**, verify the SHA-256 checksum below, and click **"Run anyway"**.
+
+---
+
+## Verify the Download
+
+Always verify the integrity of downloaded binaries before installation.
+
+- **Expected SHA-256 Checksum:**
+  ```text
+  BAFB215CAF0763F5FCDCDB9DD01E750FEB08BF0C50054610E10131B988F61267
+  ```
+
+Verify using Windows PowerShell:
+```powershell
+Get-FileHash ".\RYPER.AI.OS.Setup.0.1.1.exe" -Algorithm SHA256
 ```
 
-To build the desktop app's renderer bundle specifically (in addition to
-the `tsc --build` step above, which covers its Electron main process):
+The computed hash output must match `BAFB215CAF0763F5FCDCDB9DD01E750FEB08BF0C50054610E10131B988F61267` byte-for-byte.
 
-```bash
-cd platform/desktop-app
-npm run build:renderer   # vite build — real, bundled, production output
-```
+---
 
-See [`platform/desktop-app/README.md`](platform/desktop-app/README.md)
-for what actually launching the Electron app requires, and this build
-environment's honest limitation there (no display server to verify a
-real window against).
+## System Requirements
 
-## Repository layout
+### Minimum Requirements
+- **Operating System:** Windows 10 (64-bit, version 1909+) or Windows 11
+- **Processor:** x86_64 CPU with AVX2 instruction support (Intel Core 4th Gen+ or AMD Ryzen)
+- **Memory (RAM):** 8 GB minimum (4 GB free during operation)
+- **Disk Space:** 4 GB available storage (for Electron application runtime and default quantized model weights)
+- **Audio:** Microphone and speakers/headphones (for voice speech-to-text and text-to-speech)
 
-```
-core/            platform-agnostic domain logic — pure TypeScript, no OS APIs.
-                 21 packages: logging, event-bus, security, memory,
-                 memory-system, model-router, rag, ai-engine, conversation,
-                 voice-engine, planner, tool-framework, platform-capability,
-                 windows-agent, plugin-platform, plugin-runtime, automation,
-                 documents, media, sync, local-runtime. Each has its own
-                 README with that package's architecture and API surface.
-platform/        per-OS shells.
-                 platform/web         — @ryper/web-shell, a real, tested
-                                        Core-wiring reference (see its
-                                        source for the canonical
-                                        EventBus+ModelRouter+Memory+
-                                        ConversationEngine assembly).
-                 platform/desktop-app — @ryper/desktop-app, the Phase 12
-                                        Electron desktop application (main
-                                        process + preload + React/Vite
-                                        renderer), hosting Core in-process.
-                 platform/desktop/*   — native per-OS scaffolds (WinUI/
-                                        AppKit/GTK4) from the original
-                                        Phase 1 plan; intentionally
-                                        untouched since — see
-                                        docs/adr/0014.
-                 platform/mobile/*    — Android/iOS scaffolds, not yet
-                                        built out.
-ui/               design-system (tokens, liquid-glass presets) and
-                 components (framework-agnostic view-models consumed by
-                 every shell, including the Electron renderer).
-plugins/          the plugin SDK third-party developers build against,
-                 plus a worked example plugin.
-infra/            CI documentation and the opt-in, disabled-by-default
-                 telemetry client.
-docs/             architecture, environment, secrets, logging, project
-                 state, and every ADR.
-.github/          GitHub Actions workflows (CI, CodeQL, release).
-```
+### Recommended Configuration
+- **Processor:** 8-core modern CPU (Intel Core i7/i9 or AMD Ryzen 7/9)
+- **Memory (RAM):** 16 GB or higher
+- **GPU / VRAM:** Dedicated NVIDIA GPU with 4 GB+ VRAM (CUDA acceleration enabled in `llama.cpp`)
+- **Storage:** NVMe SSD for fast model loading into memory
 
-Every package under `core/`, `ui/`, `plugins/`, `platform/web`,
-`platform/desktop-app`, and `infra/telemetry` is an independent npm
-workspace: it has its own `package.json`, `tsconfig.json`, `src/`, and
-`test/`, and can be built and tested in isolation
-(`npm run build -w @ryper/<name>`, `npm test -w @ryper/<name>`).
+> [!IMPORTANT]
+> **GPU / Hardware Offload Notice:**
+> Without a dedicated GPU, inference runs entirely on the host CPU. While fully functional, response generation and initial tool-prompt processing will take noticeably longer than on GPU-accelerated hardware.
+
+---
+
+## Local AI Architecture
+
+RYPER AI OS embeds a dedicated local runtime manager that orchestrates local inference without cloud dependencies:
+
+- **Inference Server:** Embedded `llama.cpp` HTTP server bound strictly to `127.0.0.1:8080`.
+- **Default Model:** Qwen 2.5 1.5B Instruct quantized to GGUF format (`q4_k_m`), offering high reasoning density in ~1.1 GB of RAM/VRAM.
+- **Status Indicator:** The top navigation bar displays live runtime health:
+  - 🟢 **Ready:** Local model is loaded in memory and accepting queries.
+  - 🟡 **Downloading / Provisioning:** Model weights are being fetched or extracted.
+  - 🔴 **Error / Offline:** Server stopped or port conflict; recovery controls available.
+
+### Cold-Start Latency Disclosure
+On systems with limited VRAM or when running in CPU-hybrid mode, the **first tool-enabled conversation turn** can take approximately **70–120 seconds**. This is caused by initial context prefill of the comprehensive system prompt and JSON tool schemas. Once cached, subsequent turns in the same session respond substantially faster.
+
+---
+
+## Controlled Windows Automation
+
+RYPER connects LLM reasoning with native Windows operating system capabilities:
+
+- **Application Control:** Launch, switch, and close desktop applications.
+- **Media & Audio:** Adjust system master volume, mute/unmute, play/pause active media.
+- **Window Management:** Minimize, maximize, restore, or tile active windows.
+- **System Diagnostics:** Inspect CPU load, memory utilization, battery status, and network connectivity.
+- **Process Management:** View running processes and safely terminate unresponsive tasks.
+- **Filesystem Operations:** Search user folders, create notes, and organize files within user profile bounds.
+
+### Security Broker & Confirmation Dialogs
+RYPER does **not** give arbitrary shell access to the language model. Every action request passes through the **Capability Broker**:
+- **Read-only actions** (e.g. reading system uptime or querying battery level) execute automatically.
+- **Mutating or sensitive actions** (e.g. terminating a process, adjusting volume, launching external applications, writing files) trigger a modal **Confirmation Dialog** requiring explicit user approval.
+
+---
+
+## Voice Interaction
+
+- **Push-to-Talk:** Press and hold the on-screen microphone button or hit the configured keyboard shortcut to dictate your prompt.
+- **Speech-to-Text (STT):** Powered by local `whisper.cpp` with quantized models for near real-time voice transcription.
+- **Text-to-Speech (TTS):** Powered by local `Piper` neural voice synthesizer for natural offline spoken responses.
+- **Languages:** English, Hindi, and Hinglish.
+- **Wake-Word Limitation:** Continuous neural wake-word detection is experimental and not certified in v0.1.1; the application uses reliable push-to-talk activation by default.
+
+---
+
+## Diagnostics & Recovery
+
+When you need to verify system health or troubleshoot issues, RYPER provides built-in diagnostic tools under **Settings > Diagnostics**:
+- **Health Cards:** Real-time status cards for Local AI Engine, Audio Subsystem, Storage, and System Broker.
+- **Copy Diagnostics:** Generates a full system diagnostic summary. The diagnostic copy function **automatically sanitizes** personal usernames, user profile directory paths, and machine names.
+- **Local AI Recovery:** If the local `llama.cpp` server encounters a crash or port conflict, click **"Restart Server"** or **"Re-download Model"** to self-heal the environment without reinstalling.
+
+---
+
+## Known Limitations
+
+RYPER AI OS v0.1.1 has the following documented limitations:
+1. **Continuous Wake-Word:** Continuous hands-free wake-word detection is not certified; use push-to-talk or manual activation.
+2. **TTS Human Auditory Verification:** Synthetic audio pipeline tests pass; acoustic quality tuning across all Windows audio devices is ongoing.
+3. **Completed-Action Retries:** Edge-case retry scenarios for interrupted multi-step tool calls are undergoing further verification.
+4. **Cold-Start Latency:** First tool turn requires 70–120s on CPU or hybrid offload due to schema compilation.
+5. **In-Process Plugins:** The plugin SDK currently runs within the main process context; process-level plugin sandboxing is planned for v0.2.0.
+6. **Plaintext Settings Storage:** Application settings and optional API keys are currently stored in unencrypted JSON at `%APPDATA%\ryper-ai-os\settings.json`.
+7. **Unsigned Installer:** Windows SmartScreen will display an "Unknown Publisher" prompt until an Authenticode certificate is provisioned.
+8. **Manual Updates:** Automatic silent background updates are not enabled; new versions are installed via installer downloads.
+
+---
+
+## Platform Support Matrix
+
+| Platform | Current Status | Notes |
+| :--- | :---: | :--- |
+| **Windows 10/11 x64** | **Released (v0.1.1)** | Fully supported, tested, packaged as NSIS installer. |
+| **macOS (Apple Silicon / Intel)** | *Planned* | Architectural stubs present; not packaged or released. |
+| **Linux (x86_64 / ARM64)** | *Planned* | Platform detection stubs present; not packaged or released. |
+| **Android** | *Planned* | Architecture and contract definitions only; unreleased. |
+| **iOS / iPadOS** | *Planned* | Architecture and contract definitions only; unreleased. |
+| **Web Browser** | *Prototype Only* | Development shell for UI component testing; no OS integration. |
+
+---
 
 ## Documentation
 
-- [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) — **start here.** The
-  complete phase-by-phase history, current package inventory with public
-  API surfaces, the full dependency graph, and every known gap. Updated
-  at the end of every phase; the single source of truth for "what's
-  actually built."
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the original approved
-  Phase 1 architecture (PRD → tech selection). Where reality has since
-  diverged from this document, an ADR records why — see below.
-- [`docs/adr/`](docs/adr/) — every significant architecture decision
-  since Phase 1, in order, each with problem/root cause/decision/
-  alternatives-considered/tradeoffs.
-- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — environment variables.
-- [`docs/SECRETS.md`](docs/SECRETS.md) — secrets management policy.
-- [`docs/LOGGING.md`](docs/LOGGING.md) — logging conventions.
-- [`CHANGELOG.md`](CHANGELOG.md) — notable changes, phase by phase.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — coding standards and PR process.
+- 📖 **[User Guide](docs/USER_GUIDE.md):** Complete walkthrough for installation, onboarding, voice, diagnostics, and recovery.
+- 🔒 **[Security Policy](.github/SECURITY.md):** Vulnerability reporting process and security disclosures.
+- 📜 **[Third-Party Notices](THIRD_PARTY_NOTICES.md):** Attributions and licenses for bundled engines, models, and libraries.
+- 🤝 **[Contributing Guidelines](CONTRIBUTING.md):** How to contribute to RYPER AI OS.
+- ⚖️ **[Code of Conduct](CODE_OF_CONDUCT.md):** Community behavioral standards.
+- 📝 **[Architecture Decision Records](docs/adr/):** Technical design records documenting architecture decisions.
 
-## Known limitations
+---
 
-This is a real, working codebase built and verified in a Linux sandbox
-with no display server, no Windows/macOS native toolchain, and no audio
-hardware. Where that matters, the affected package's own README says so
-plainly rather than silently mocking around it — see in particular
-[`core/windows-agent/README.md`](core/windows-agent/README.md)'s "Honest
-Limitations" (its production PowerShell-backed API) and
-[`platform/desktop-app/README.md`](platform/desktop-app/README.md)'s
-equivalent section (the Electron GUI itself, and — since Phase 13.6 — the
-real audio bridge's untested-against-physical-hardware status, and —
-since Phase 13.7/13.8 — the real local STT/TTS providers: Piper's
-binary and a real voice were successfully obtained and run in this
-sandbox and produced real audio; a real Whisper model could not be —
-confirmed structurally unreachable, not just untried, see
-[`docs/adr/0019`](docs/adr/0019-phase-13-8-real-verification-findings.md)
-— and since Phase 13.9, the real LLM provider: `llama-server` was built
-from real source and run against a real, invalid test-fixture GGUF
-(producing a real, honest failure), but a real inference-capable GGUF
-chat model was, like Whisper's, structurally unreachable from this
-sandbox; no real cloud LLM API key was available either. See
-[`docs/adr/0020`](docs/adr/0020-real-llm-provider-and-tool-call-validation.md)).
-`docs/
-PROJECT_STATE.md`'s "known integration gaps" and "Phase 12 desktop
-shell: honest scope" sections list every gap across the whole repository
-in one place.
+## Local Development
+
+To run and build RYPER AI OS from source on Windows:
+
+### Prerequisites
+- Node.js 20.x or 22.x (LTS recommended)
+- npm 10.x+
+- Git for Windows
+- Visual Studio Build Tools / C++ build tools (for native bindings if compiling local tools)
+
+### Setup Instructions
+```bash
+# 1. Clone repository
+git clone https://github.com/anuraaag23/RYPER-AI-OS.git
+cd RYPER-AI-OS
+
+# 2. Install workspace dependencies
+npm install
+
+# 3. Run the automated test suite
+npm test
+
+# 4. Start the desktop application in development mode
+npm run dev --workspace=@ryper/desktop-app
+```
+
+---
+
+## Bug Reports & Feedback
+
+Found a bug or have a suggestion?
+- 🐛 **[Report a Bug](https://github.com/anuraaag23/RYPER-AI-OS/issues/new?template=bug_report.yml)**
+- 💡 **[Request a Feature](https://github.com/anuraaag23/RYPER-AI-OS/issues/new?template=feature_request.yml)**
+- 🔒 **[Report a Security Vulnerability](https://github.com/anuraaag23/RYPER-AI-OS/security/advisories/new)**
+
+---
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+RYPER AI OS is licensed under the **[MIT License](LICENSE)**.
+Bundled models, inference runtimes, and third-party components are subject to their respective open-source licenses detailed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

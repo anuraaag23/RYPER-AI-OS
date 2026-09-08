@@ -1,0 +1,42 @@
+name: Feature Request
+description: Suggest an idea or feature for RYPER AI OS
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please provide details to help maintainers evaluate the request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Use Case
+      description: Is your feature request related to a problem or specific workflow?
+      placeholder: "I find it frustrating when..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution or feature you'd like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you have considered.
+    validations:
+      required: false
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Feature Scope
+      options:
+        - label: Local AI Runtime / Model Support
+        - label: Voice Pipeline (STT / TTS / Wake-Word)
+        - label: Windows Automation & System Capabilities
+        - label: Security & Permission Model
+        - label: User Interface & Experience
+        - label: Cross-Platform Support (macOS / Linux)

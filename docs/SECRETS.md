@@ -1,48 +1,36 @@
-# Secrets Management
+# Secrets & Credential Management
 
-RYPER never hardcodes a secret in source, a config file committed to git, or
-a built application bundle. This document is the single source of truth for
-where a secret comes from in each environment.
+This document details how credentials, configuration, and sensitive settings are handled in **RYPER AI OS**.
 
-## Local development
+---
 
-- Copy `.env.example` to `.env` (git-ignored).
-- `.env` is read only by local dev tooling (test harness, dev server) — it
-  is never read by production builds.
+## Current Desktop Implementation (v0.1.1)
 
-## Desktop shells
+In the current **v0.1.1** Windows desktop release:
 
-- Secrets (cloud API keys, sync credentials) are stored via each OS's native
-  secure storage, accessed only through `core/security`'s `CapabilityBroker`:
-  - Windows: DPAPI / Credential Manager
-  - macOS: Keychain Services
-  - Linux: Secret Service API (libsecret)
-- No secret is ever written to the SQLite database in plaintext; the
-  database itself is encrypted at rest (SQLCipher), but credentials
-  specifically live in the OS secret store, not application storage.
+- **Local-Only Operation (Default):** In default local mode, RYPER uses the embedded `llama.cpp` runtime on `127.0.0.1:8080`. No cloud API keys, secrets, or remote authentication tokens are required or used.
+- **Settings Storage:** Application configuration (theme, audio devices, local model paths, and any optionally configured cloud provider keys) is stored in standard JSON format at:
+  ```text
+  %APPDATA%\ryper-ai-os\settings.json
+  ```
+- **Plaintext Disclosure:** In v0.1.1, settings in `settings.json` are stored in **plaintext JSON format**. While the file is restricted to the local Windows user profile directory, it is **not** currently encrypted using Windows DPAPI or Credential Manager. Users should not store high-value corporate API keys on shared or unencrypted workstations.
+- **Hardcoded Secrets:** RYPER's source code contains **zero hardcoded API keys, tokens, or credentials**. Automated pre-commit scans enforce this invariant across all packages.
 
-## Mobile shells
+---
 
-- Android: Android Keystore-backed `EncryptedSharedPreferences`.
-- iOS: Keychain Services.
+## Planned Target Architecture (v0.2.0+)
 
-## CI/CD (GitHub Actions)
+The following security enhancements are planned for upcoming releases:
 
-- Secrets are stored in GitHub's encrypted repository/organization secrets
-  and injected as environment variables only for the steps that need them
-  (see `.github/workflows/ci.yml` and `release.yml`).
-- CI never prints a secret to logs; workflows that must use one wrap the
-  step with `::add-mask::` and avoid `set -x`/`echo $SECRET` patterns.
+- **Windows:** Migrate cloud API key storage to the Windows Credential Manager or Windows Data Protection API (DPAPI via `node-keytar` or native Windows API bindings).
+- **macOS / Linux:** Keychain Services on macOS; Secret Service API (`libsecret`) on Linux desktop.
+- **Local Database Encryption:** If persistent conversation history is stored in SQLite in future releases, SQLCipher / SQLite encryption at rest will be introduced.
 
-## Cloud sync relay
+---
 
-- The relay is designed to be zero-knowledge: it stores only end-to-end
-  encrypted blobs. The encryption key is derived on-device and never
-  transmitted to the relay in any form.
+## Developer Guidelines
 
-## Rotation
-
-- Any credential checked into git history by mistake is treated as
-  compromised: rotate it immediately at the provider, then scrub history.
-- Cloud API keys are scoped per-deployment (dev/staging/prod use separate
-  keys) so a leak in one environment doesn't expose the others.
+1. **Never commit secrets:** Never commit `.env`, credentials, tokens, or private keys to git.
+2. **Use .env.example:** Any environment variables required for local testing must be documented with placeholder values in `.env.example`.
+3. **Automated Audits:** All CI and maintenance workflows run secret scanners to detect inadvertent credential leaks.
+4. **Immediate Rotation:** Any credential accidentally pushed to a public or private branch must be considered compromised and rotated immediately at the upstream provider.
