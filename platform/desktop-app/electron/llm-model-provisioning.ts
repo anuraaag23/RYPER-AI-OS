@@ -149,6 +149,7 @@ export class LlamaServerManager {
       "-ngl",
       process.env["RYPER_LLAMA_GPU_LAYERS"] ?? "99",
       "--flash-attn",
+      process.env["RYPER_LLAMA_FLASH_ATTN"] ?? "on",
       "--jinja",
     ]);
     this.baseUrl = `http://127.0.0.1:${paths.port}/v1`;

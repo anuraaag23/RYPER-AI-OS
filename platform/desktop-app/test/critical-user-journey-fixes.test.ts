@@ -148,6 +148,7 @@ describe("Critical Public User Journey Fixes", () => {
 
       expect(spawnedArgs).toContain("-ngl");
       expect(spawnedArgs).toContain("--flash-attn");
+      expect(spawnedArgs).toContain("on");
       expect(spawnedArgs).toContain("--jinja");
     });
   });

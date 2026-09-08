@@ -80,6 +80,7 @@ export function createPiperRuntimeProvider(config: PiperRuntimeConfig): LocalRun
 
       const handle = config.processRunner(config.binaryPath, args, {
         stdin: new TextEncoder().encode(request.text),
+        env: { PYTHONIOENCODING: "utf-8" },
       });
 
       let timedOut = false;
