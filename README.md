@@ -2,6 +2,7 @@
 
 > **Privacy-first, offline-capable AI desktop assistant for Windows that combines local AI inference with controlled Windows system actions, voice interaction, diagnostics, and a secure permission model.**
 
+[![CI](https://github.com/anuraaag23/RYPER-AI-OS/actions/workflows/ci.yml/badge.svg)](https://github.com/anuraaag23/RYPER-AI-OS/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/anuraaag23/RYPER-AI-OS/releases/tag/v0.1.1)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078D6.svg)](https://github.com/anuraaag23/RYPER-AI-OS/releases/tag/v0.1.1)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
